@@ -50,3 +50,12 @@ class JobRepository:
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def set_celery_task_id(
+        self,
+        job: ProcessingJob,
+        celery_task_id: str,
+    ) -> ProcessingJob:
+        job.celery_task_id = celery_task_id
+        await self.session.flush()
+        return job
