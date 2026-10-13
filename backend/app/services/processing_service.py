@@ -14,6 +14,7 @@ from app.repositories.meeting_repository import MeetingRepository
 from app.repositories.recording_repository import RecordingRepository
 from app.repositories.transcript_repository import TranscriptRepository
 from app.services.alignment_service import AlignmentService
+from app.services.analysis_service import AnalysisService
 from app.services.audio_service import AudioProcessingError, AudioService
 from app.services.diarization_service import DiarizationProcessingError, DiarizationService
 from app.workers.job_lease import JobLeaseTracker
@@ -35,7 +36,8 @@ class ProcessingPipelineError(Exception):
 
 class ProcessingService:
     """Orchestrates recording download, media validation, FFmpeg normalization,
-    transcription, speaker diarization, alignment, and transcript persistence.
+    transcription, speaker diarization, alignment, transcript persistence,
+    and meeting intelligence analysis.
     """
 
     def __init__(
@@ -50,6 +52,7 @@ class ProcessingService:
         settings: Settings,
         diarization_service: DiarizationService | None = None,
         alignment_service: AlignmentService | None = None,
+        analysis_service: AnalysisService | None = None,
     ) -> None:
         self.job_repo = job_repo
         self.meeting_repo = meeting_repo
@@ -61,6 +64,7 @@ class ProcessingService:
         self.settings = settings
         self.diarization_service = diarization_service
         self.alignment_service = alignment_service or AlignmentService()
+        self.analysis_service = analysis_service
 
     async def execute_job(
         self,
@@ -267,7 +271,27 @@ class ProcessingService:
                     segments_data=segments_payload,
                 )
 
-                # Stage 5: Release lease as COMPLETED
+                # Stage 5: ANALYZING & VERIFYING — Run meeting intelligence extraction
+                if self.analysis_service:
+                    await self.job_repo.update_stage(job=job, stage=JobStage.ANALYZING)
+                    await lease_tracker.renew_heartbeat(job_id=job_id, worker_id=worker_id)
+
+                    # Fetch persisted segments from DB for authoritative IDs and timestamps
+                    db_segments = await self.transcript_repo.get_segments_by_transcript(transcript.id)
+                    try:
+                        await self.analysis_service.execute_analysis(
+                            meeting_id=meeting_id,
+                            user_id=job.user_id,
+                            segments=list(db_segments),
+                        )
+                    except Exception as exc:
+                        raise ProcessingPipelineError(
+                            f"Meeting intelligence extraction failed: {exc}",
+                            error_code="ANALYSIS_FAILED",
+                            is_retryable=False,
+                        ) from exc
+
+                # Stage 6: Release lease as COMPLETED
                 completed_job = await lease_tracker.release_lease(
                     job_id=job_id,
                     worker_id=worker_id,

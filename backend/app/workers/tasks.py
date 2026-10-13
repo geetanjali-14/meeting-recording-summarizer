@@ -5,17 +5,22 @@ from typing import Any
 
 from celery import Task  # type: ignore[import-untyped]
 
+from app.agents.meeting_analysis_agent import MeetingAnalysisAgent
+from app.agents.verification_agent import VerificationAgent
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.database import get_session
 from app.providers.diarization import get_diarization_provider
+from app.providers.llm import get_llm_provider
 from app.providers.storage import get_storage_provider
 from app.providers.transcription import get_transcription_provider
+from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.job_repository import JobRepository
 from app.repositories.meeting_repository import MeetingRepository
 from app.repositories.recording_repository import RecordingRepository
 from app.repositories.transcript_repository import TranscriptRepository
 from app.services.alignment_service import AlignmentService
+from app.services.analysis_service import AnalysisService
 from app.services.audio_service import AudioService
 from app.services.diarization_service import DiarizationService
 from app.services.processing_service import ProcessingPipelineError, ProcessingService
@@ -62,12 +67,24 @@ def process_meeting_recording(self: Task, job_id_str: str, meeting_id_str: str) 
             meeting_repo = MeetingRepository(session)
             recording_repo = RecordingRepository(session)
             transcript_repo = TranscriptRepository(session)
+            analysis_repo = AnalysisRepository(session)
             storage_provider = get_storage_provider(settings)
             audio_service = AudioService()
             transcription_provider = get_transcription_provider(settings)
             diarization_provider = get_diarization_provider(settings)
             diarization_service = DiarizationService(diarization_provider, settings)
             alignment_service = AlignmentService()
+
+            llm_provider = get_llm_provider(settings)
+            analysis_agent = MeetingAnalysisAgent(llm_provider, settings)
+            verification_agent = VerificationAgent(llm_provider, settings)
+            analysis_service = AnalysisService(
+                analysis_repo=analysis_repo,
+                analysis_agent=analysis_agent,
+                verification_agent=verification_agent,
+                settings=settings,
+            )
+
             lease_tracker = JobLeaseTracker(
                 session,
                 lease_duration_seconds=settings.WORKER_LEASE_DURATION_SECONDS,
@@ -84,6 +101,7 @@ def process_meeting_recording(self: Task, job_id_str: str, meeting_id_str: str) 
                 settings=settings,
                 diarization_service=diarization_service,
                 alignment_service=alignment_service,
+                analysis_service=analysis_service,
             )
 
             job = await service.execute_job(
