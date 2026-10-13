@@ -1,0 +1,7 @@
+{
+  "phantom_owners": ["Alice", "Bob", "Dan", "Eve", "Frank"],
+  "phantom_deadlines": ["tomorrow", "end of quarter", "December 31st", "immediately"],
+  "phantom_topics": ["Payment Gateway Migration", "Kubernetes cluster autoscaling"],
+  "phantom_decisions": ["Cancelled SSO support", "Switched from Okta to PingFederate"]
+}
+

@@ -1,9 +1,10 @@
-import time
 import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.deps import get_meeting_service
 from app.core.config import Settings, get_settings
 from app.core.rate_limiter import (
     SlidingWindowRateLimiter,
@@ -13,6 +14,7 @@ from app.core.rate_limiter import (
     status_polling_limiter,
 )
 from app.main import create_app
+from app.services.meeting_service import MeetingNotFoundError
 from tests.security.test_tenant_isolation import create_token
 
 
@@ -83,7 +85,11 @@ def test_get_meetings_read_rate_limit_enforced() -> None:
         JWT_ALGORITHMS=["HS256"],
         JWT_SIGNING_KEY_OR_JWKS="test-secret",
     )
+    mock_service = AsyncMock()
+    mock_service.get_meeting_details.side_effect = MeetingNotFoundError("Not found")
+
     app.dependency_overrides[get_settings] = lambda: test_settings
+    app.dependency_overrides[get_meeting_service] = lambda: mock_service
     client = TestClient(app)
 
     user_id = uuid.uuid4()
@@ -102,4 +108,3 @@ def test_get_meetings_read_rate_limit_enforced() -> None:
     res3 = client.get(f"/api/v1/meetings/{uuid.uuid4()}", headers=headers)
     assert res3.status_code == 429
     assert res3.json()["error"]["code"] == "RATE_LIMITED"
-

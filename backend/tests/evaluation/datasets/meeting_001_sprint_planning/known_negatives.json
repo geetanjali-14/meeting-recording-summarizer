@@ -1,0 +1,7 @@
+{
+  "phantom_owners": ["Charlie", "David", "Admin", "Eve", "Frank"],
+  "phantom_deadlines": ["tomorrow morning", "next year", "end of month", "2027-01-01"],
+  "phantom_topics": ["Kubernetes cluster deployment", "Frontend CSS redesign", "Cryptocurrency billing"],
+  "phantom_decisions": ["Cancelled the project", "Adopted MongoDB as primary database"]
+}
+

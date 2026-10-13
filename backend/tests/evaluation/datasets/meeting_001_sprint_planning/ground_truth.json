@@ -1,0 +1,54 @@
+{
+  "expected_summary_points": [
+    "Finalize Sprint 14 deployment and task ownership.",
+    "Decided to migrate to Supabase pooled connection strings.",
+    "Alice assigned database pooling configuration by Friday 5 PM.",
+    "Bob assigned Celery Redis rate limiting decorator by Wednesday.",
+    "Risk identified regarding Cloudflare R2 credential rotation."
+  ],
+  "expected_decisions": [
+    {
+      "decision_text": "Migrate to Supabase pooled connection strings next Monday",
+      "confidence": "EXPLICIT",
+      "evidence_segment_ids": [
+        "11111111-1111-1111-1111-111111111102",
+        "11111111-1111-1111-1111-111111111103"
+      ]
+    }
+  ],
+  "expected_action_items": [
+    {
+      "action_text": "Configure database pooling connection strings",
+      "owner": "Alice",
+      "due_date": "Friday at 5 PM",
+      "evidence_segment_ids": [
+        "11111111-1111-1111-1111-111111111103"
+      ]
+    },
+    {
+      "action_text": "Implement Celery Redis rate limiting decorator",
+      "owner": "Bob",
+      "due_date": "Wednesday",
+      "evidence_segment_ids": [
+        "11111111-1111-1111-1111-111111111105"
+      ]
+    }
+  ],
+  "expected_risks": [
+    {
+      "risk_text": "Pre-signed upload URLs will fail if Cloudflare R2 credentials rotate unexpectedly",
+      "evidence_segment_ids": [
+        "11111111-1111-1111-1111-111111111106"
+      ]
+    }
+  ],
+  "expected_open_questions": [
+    {
+      "question_text": "Whether to deploy staging cluster to Fly.io or Render",
+      "evidence_segment_ids": [
+        "11111111-1111-1111-1111-111111111107"
+      ]
+    }
+  ]
+}
+

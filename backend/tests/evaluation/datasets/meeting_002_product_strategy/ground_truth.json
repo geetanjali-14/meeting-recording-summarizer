@@ -1,0 +1,45 @@
+{
+  "expected_summary_points": [
+    "Review enterprise SSO launch requirements.",
+    "Decided to require SAML 2.0 with Okta for Q4 and defer SCIM to Q1.",
+    "Carol assigned drafting SAML security architecture specification by November 15th.",
+    "Risk identified regarding self-signed IdP metadata rejection without valid TLS certificates.",
+    "Open question raised about multi-tenant isolation support for separate IdP discovery."
+  ],
+  "expected_decisions": [
+    {
+      "decision_text": "Require SAML 2.0 with Okta for Q4 enterprise customers and defer SCIM to Q1",
+      "confidence": "EXPLICIT",
+      "evidence_segment_ids": [
+        "22222222-2222-2222-2222-222222222202"
+      ]
+    }
+  ],
+  "expected_action_items": [
+    {
+      "action_text": "Draft the SAML security architecture specification",
+      "owner": "Carol",
+      "due_date": "November 15th",
+      "evidence_segment_ids": [
+        "22222222-2222-2222-2222-222222222203"
+      ]
+    }
+  ],
+  "expected_risks": [
+    {
+      "risk_text": "Enterprise customers might reject self-signed IdP metadata without valid TLS certificates",
+      "evidence_segment_ids": [
+        "22222222-2222-2222-2222-222222222204"
+      ]
+    }
+  ],
+  "expected_open_questions": [
+    {
+      "question_text": "Whether multi-tenant isolation supports separate IdP discovery",
+      "evidence_segment_ids": [
+        "22222222-2222-2222-2222-222222222205"
+      ]
+    }
+  ]
+}
+
