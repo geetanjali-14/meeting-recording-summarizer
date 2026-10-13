@@ -1,9 +1,10 @@
+import { Navbar } from "@/components/Navbar";
 import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Meeting Intelligence Summarizer",
-  description: "Asynchronous meeting recording summarization and analysis",
+  description: "Asynchronous meeting recording summarization, transcription and analysis",
 };
 
 export default function RootLayout({
@@ -13,8 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+        <Navbar />
+        <div className="flex-1">{children}</div>
+      </body>
     </html>
   );
 }
-
