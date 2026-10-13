@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db_session
 from app.api.v1.utils import create_error_envelope, create_meta
+from app.core.rate_limiter import general_read_limiter, rate_limit
 from app.core.security import UserContext
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.meeting_repository import MeetingRepository
@@ -31,9 +32,11 @@ router = APIRouter(prefix="/meetings", tags=["Analysis"])
     "/{meeting_id}/analysis",
     response_model=SuccessEnvelope[MeetingAnalysisResponse],
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(rate_limit(general_read_limiter))],
     responses={
         401: {"model": ErrorEnvelope},
         404: {"model": ErrorEnvelope},
+        429: {"model": ErrorEnvelope},
     },
     summary="Get structured meeting intelligence and evidence citations",
 )

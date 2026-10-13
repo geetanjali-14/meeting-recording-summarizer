@@ -58,6 +58,8 @@ export interface MeetingDetail {
 
 export interface MeetingCreateResponseData {
   meeting_id: string;
+  recording_id: string;
+  status: string;
   upload_url: string;
   upload_token: string;
   expires_in_seconds: number;

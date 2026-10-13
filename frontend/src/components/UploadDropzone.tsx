@@ -19,6 +19,29 @@ const ALLOWED_MIME_TYPES = [
   "video/quicktime",
 ];
 
+const EXTENSION_MIME_MAP: Record<string, string> = {
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".m4a": "audio/x-m4a",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".ogg": "audio/ogg",
+};
+
+export function resolveContentType(file: File): string {
+  const type = file.type?.toLowerCase();
+  if (type === "audio/mp3") return "audio/mpeg";
+  if (type === "audio/x-wav") return "audio/wav";
+  if (type === "audio/m4a") return "audio/x-m4a";
+  if (type && type !== "application/octet-stream") return type;
+
+  const name = file.name.toLowerCase();
+  for (const [ext, mime] of Object.entries(EXTENSION_MIME_MAP)) {
+    if (name.endsWith(ext)) return mime;
+  }
+  return "video/mp4";
+}
+
 export function UploadDropzone() {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -109,16 +132,17 @@ export function UploadDropzone() {
       setStatusText("1. Initiating upload and requesting pre-signed URL...");
 
       // Step 1: Initiate meeting & request pre-signed upload URL
+      const resolvedType = resolveContentType(file);
       const createRes = await api.createMeeting({
         title: title.trim(),
         description: description.trim() || undefined,
         meeting_date: meetingDate,
         filename: file.name,
-        content_type: file.type || "application/octet-stream",
+        content_type: resolvedType,
         file_size_bytes: file.size,
       });
 
-      const { meeting_id, upload_url, upload_token } = createRes.data;
+      const { meeting_id, recording_id, upload_url, upload_token } = createRes.data;
 
       // Step 2: Upload directly to Cloudflare R2 via XMLHttpRequest with progress
       setStatusText("2. Uploading media directly to private storage...");
@@ -128,7 +152,7 @@ export function UploadDropzone() {
 
       // Step 3: Confirm upload completion with backend
       setStatusText("3. Confirming upload and queueing ingestion pipeline...");
-      await api.confirmUpload(meeting_id, upload_token);
+      await api.confirmUpload(meeting_id, recording_id, upload_token);
 
       setStatusText("Complete! Redirecting to meeting processing view...");
       router.push(`/meetings/${meeting_id}`);

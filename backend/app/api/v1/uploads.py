@@ -9,6 +9,7 @@ from app.api.deps import (
     get_upload_service,
 )
 from app.api.v1.utils import create_error_envelope, create_meta
+from app.core.rate_limiter import confirm_upload_limiter, rate_limit
 from app.core.security import UserContext
 from app.schemas.envelope import ErrorEnvelope, SuccessEnvelope
 from app.schemas.upload import ConfirmUploadRequest, ConfirmUploadResponseData
@@ -28,11 +29,13 @@ router = APIRouter(prefix="/meetings", tags=["Uploads"])
     "/{meeting_id}/confirm-upload",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=SuccessEnvelope[ConfirmUploadResponseData],
+    dependencies=[Depends(rate_limit(confirm_upload_limiter))],
     responses={
         401: {"model": ErrorEnvelope},
         404: {"model": ErrorEnvelope},
         409: {"model": ErrorEnvelope},
         422: {"model": ErrorEnvelope},
+        429: {"model": ErrorEnvelope},
         502: {"model": ErrorEnvelope},
     },
 )

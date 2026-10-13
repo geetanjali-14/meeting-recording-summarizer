@@ -32,9 +32,14 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title=settings.APP_NAME,
-        debug=settings.DEBUG,
+        debug=False,  # Always False at FastAPI layer to prevent leaking tracebacks to HTTP clients
         lifespan=lifespan,
     )
+
+    # Security Headers Middleware
+    from app.core.middleware import SecurityHeadersMiddleware
+
+    app.add_middleware(SecurityHeadersMiddleware)
 
     # CORS Middleware
     app.add_middleware(
@@ -100,6 +105,26 @@ def create_app() -> FastAPI:
             status_code=exc.status_code,
             content=envelope.model_dump(mode="json"),
             headers=headers,
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        """Sanitizes unexpected internal exceptions, preventing stack trace/credential leaks."""
+        logger.error(
+            "Unhandled server exception on %s: %s",
+            request.url.path,
+            exc,
+            exc_info=True,
+            extra={"path": request.url.path},
+        )
+        envelope = create_error_envelope(
+            code="INTERNAL_ERROR",
+            message="An unexpected internal server error occurred.",
+            request=request,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=envelope.model_dump(mode="json"),
         )
 
     # Mount API v1 router

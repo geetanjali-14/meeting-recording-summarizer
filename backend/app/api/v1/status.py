@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db_session
 from app.api.v1.utils import create_error_envelope, create_meta
+from app.core.rate_limiter import rate_limit, status_polling_limiter
 from app.core.security import UserContext
 from app.repositories.job_repository import JobRepository
 from app.repositories.meeting_repository import MeetingRepository
@@ -23,9 +24,11 @@ router = APIRouter(prefix="/meetings", tags=["Status"])
     "/{meeting_id}/status",
     response_model=SuccessEnvelope[JobStatusResponse],
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(rate_limit(status_polling_limiter))],
     responses={
         401: {"model": ErrorEnvelope},
         404: {"model": ErrorEnvelope},
+        429: {"model": ErrorEnvelope},
     },
     summary="Get processing status of a meeting recording",
 )

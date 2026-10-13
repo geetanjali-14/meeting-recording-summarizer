@@ -11,6 +11,11 @@ from app.api.deps import (
     get_upload_service,
 )
 from app.api.v1.utils import create_error_envelope, create_list_meta, create_meta
+from app.core.rate_limiter import (
+    create_meeting_limiter,
+    general_read_limiter,
+    rate_limit,
+)
 from app.core.security import UserContext
 from app.schemas.envelope import ErrorEnvelope, ListEnvelope, SuccessEnvelope
 from app.schemas.meeting import (
@@ -35,9 +40,11 @@ router = APIRouter(prefix="/meetings", tags=["Meetings"])
     "",
     status_code=status.HTTP_201_CREATED,
     response_model=SuccessEnvelope[MeetingCreateResponseData],
+    dependencies=[Depends(rate_limit(create_meeting_limiter))],
     responses={
         401: {"model": ErrorEnvelope},
         422: {"model": ErrorEnvelope},
+        429: {"model": ErrorEnvelope},
         502: {"model": ErrorEnvelope},
     },
 )
@@ -92,7 +99,11 @@ async def create_meeting(
 @router.get(
     "",
     response_model=ListEnvelope[MeetingListItem],
-    responses={401: {"model": ErrorEnvelope}},
+    dependencies=[Depends(rate_limit(general_read_limiter))],
+    responses={
+        401: {"model": ErrorEnvelope},
+        429: {"model": ErrorEnvelope},
+    },
 )
 async def list_meetings(
     request: Request,
@@ -130,9 +141,11 @@ async def list_meetings(
 @router.get(
     "/{meeting_id}",
     response_model=SuccessEnvelope[MeetingDetailResponseData],
+    dependencies=[Depends(rate_limit(general_read_limiter))],
     responses={
         401: {"model": ErrorEnvelope},
         404: {"model": ErrorEnvelope},
+        429: {"model": ErrorEnvelope},
     },
 )
 async def get_meeting_details(
