@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     JWT_AUDIENCE: str = "authenticated"
     JWT_ALGORITHMS: list[str] = ["HS256", "RS256"]
     JWT_SIGNING_KEY_OR_JWKS: str = "dev-insecure-secret-key-change-in-production"
+    JWKS_CACHE_TTL_SECONDS: int = 300
 
     # 4. Object Storage (Cloudflare R2 / S3 Compatible)
     STORAGE_PROVIDER: Literal["r2", "s3", "mock"] = "r2"
@@ -112,6 +113,8 @@ class Settings(BaseSettings):
                 raise ValueError("Valid STORAGE_ACCESS_KEY_ID is required in production.")
             if "placeholder" in self.LLM_API_KEY and self.LLM_PROVIDER != "mock":
                 raise ValueError("Valid LLM_API_KEY is required in production.")
+            if "dev-insecure-secret-key" in self.JWT_SIGNING_KEY_OR_JWKS:
+                raise ValueError("Insecure default JWT key cannot be used in production.")
         return self
 
     def __repr__(self) -> str:

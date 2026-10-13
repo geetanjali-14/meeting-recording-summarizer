@@ -70,7 +70,7 @@ def upgrade() -> None:
         sa.Column("meeting_date", sa.Date(), server_default=sa.func.current_date(), nullable=False),
         sa.Column(
             "status",
-            sa.Enum("CREATED", "ACTIVE", "DELETING", "PURGED", name="meeting_status"),
+            meeting_status,
             server_default="CREATED",
             nullable=False,
         ),
@@ -122,7 +122,7 @@ def upgrade() -> None:
         sa.Column("sha256_hash", sa.String(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("PRESIGNED", "UPLOADED", "DELETED", name="recording_status"),
+            recording_status,
             server_default="PRESIGNED",
             nullable=False,
         ),
@@ -187,25 +187,13 @@ def upgrade() -> None:
         sa.Column("celery_task_id", sa.String(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("PENDING", "RUNNING", "COMPLETED", "FAILED", "CANCELLED", name="job_status"),
+            job_status,
             server_default="PENDING",
             nullable=False,
         ),
         sa.Column(
             "stage",
-            sa.Enum(
-                "CREATED",
-                "VALIDATING",
-                "EXTRACTING_AUDIO",
-                "TRANSCRIBING",
-                "DIARIZING",
-                "ANALYZING",
-                "VERIFYING",
-                "SAVING",
-                "COMPLETED",
-                "FAILED",
-                name="job_stage",
-            ),
+            job_stage,
             server_default="CREATED",
             nullable=False,
         ),
@@ -405,7 +393,7 @@ def upgrade() -> None:
         sa.Column("sequence_index", sa.Integer(), nullable=False),
         sa.Column(
             "confidence",
-            sa.Enum("EXPLICIT", "INFERRED", name="confidence_level"),
+            confidence_level,
             server_default="EXPLICIT",
             nullable=False,
         ),
@@ -573,7 +561,7 @@ def upgrade() -> None:
         sa.Column("session_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("meeting_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("role", sa.Enum("USER", "ASSISTANT", "SYSTEM", name="chat_role"), nullable=False),
+        sa.Column("role", chat_role, nullable=False),
         sa.Column("content", sa.String(), nullable=False),
         sa.Column(
             "citation_segment_ids",
