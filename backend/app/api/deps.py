@@ -1,5 +1,6 @@
 import logging
 from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -13,6 +14,10 @@ from app.providers.storage.base import StorageProvider
 from app.repositories.job_repository import JobRepository
 from app.repositories.meeting_repository import MeetingRepository
 from app.repositories.recording_repository import RecordingRepository
+
+if TYPE_CHECKING:
+    from app.services.meeting_service import MeetingService
+    from app.services.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +110,7 @@ def get_meeting_service(
     storage_provider: StorageProvider = Depends(get_storage_provider),
 ) -> "MeetingService":
     from app.services.meeting_service import MeetingService
+
     return MeetingService(meeting_repo=meeting_repo, storage_provider=storage_provider)
 
 
@@ -116,6 +122,7 @@ def get_upload_service(
     settings: Settings = Depends(get_settings),
 ) -> "UploadService":
     from app.services.upload_service import UploadService
+
     return UploadService(
         meeting_repo=meeting_repo,
         recording_repo=recording_repo,

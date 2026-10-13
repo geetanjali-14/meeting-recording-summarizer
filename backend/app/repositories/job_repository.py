@@ -51,6 +51,24 @@ class JobRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_id_system(
+        self,
+        job_id: uuid.UUID,
+    ) -> ProcessingJob | None:
+        """Fetches job by ID without user scope, for worker process."""
+        stmt = select(ProcessingJob).where(ProcessingJob.id == job_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def update_stage(
+        self,
+        job: ProcessingJob,
+        stage: JobStage,
+    ) -> ProcessingJob:
+        job.stage = stage
+        await self.session.flush()
+        return job
+
     async def set_celery_task_id(
         self,
         job: ProcessingJob,

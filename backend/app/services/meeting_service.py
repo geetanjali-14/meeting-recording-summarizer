@@ -6,7 +6,6 @@ from app.models.meeting import Meeting, MeetingStatus
 from app.models.recording import RecordingStatus
 from app.providers.storage.base import StorageProvider
 from app.repositories.meeting_repository import MeetingRepository
-from app.schemas.meeting import MeetingCreateRequest
 
 logger = logging.getLogger(__name__)
 
@@ -122,4 +121,3 @@ class MeetingService:
 
         # Cascade delete from database
         await self.meeting_repo.delete(meeting_id=meeting_id, user_id=user_id)
-

@@ -1,4 +1,5 @@
 from typing import Generic, TypeVar
+
 from pydantic import BaseModel, ConfigDict
 
 T = TypeVar("T")
@@ -56,4 +57,3 @@ class ErrorEnvelope(BaseModel):
     """Standard unified error response envelope."""
 
     error: ErrorPayload
-

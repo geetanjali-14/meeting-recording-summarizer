@@ -1,24 +1,20 @@
 import datetime
 import uuid
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import Sequence
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
-    get_current_user,
-    get_db_session,
     get_job_repository,
     get_meeting_repository,
     get_recording_repository,
     get_storage_provider,
 )
 from app.core.config import Settings, get_settings
-from app.core.security import UserContext
 from app.main import create_app
 from app.models.meeting import Meeting, MeetingStatus
 from app.models.processing_job import JobStage, JobStatus, ProcessingJob
@@ -69,6 +65,10 @@ class MockStorageProvider(StorageProvider):
     def object_exists(self, storage_key: str) -> bool:
         return storage_key in self.objects
 
+    def download_file(self, storage_key: str, destination_path: str) -> None:
+        with open(destination_path, "wb") as f:
+            f.write(b"mock_audio_content")
+
 
 class InMemoryMeetingRepository(MeetingRepository):
     def __init__(self) -> None:
@@ -112,16 +112,20 @@ class InMemoryMeetingRepository(MeetingRepository):
         offset: int = 0,
     ) -> Sequence[Meeting]:
         meetings = [
-            m for m in self.storage.values()
+            m
+            for m in self.storage.values()
             if m.user_id == user_id and m.status != MeetingStatus.PURGED
         ]
         return meetings[offset : offset + limit]
 
     async def count_by_user(self, user_id: uuid.UUID) -> int:
-        return len([
-            m for m in self.storage.values()
-            if m.user_id == user_id and m.status != MeetingStatus.PURGED
-        ])
+        return len(
+            [
+                m
+                for m in self.storage.values()
+                if m.user_id == user_id and m.status != MeetingStatus.PURGED
+            ]
+        )
 
     async def mark_active(self, meeting: Meeting) -> Meeting:
         meeting.status = MeetingStatus.ACTIVE
@@ -226,9 +230,7 @@ class InMemoryJobRepository(JobRepository):
             return None
         return job
 
-    async def set_celery_task_id(
-        self, job: ProcessingJob, celery_task_id: str
-    ) -> ProcessingJob:
+    async def set_celery_task_id(self, job: ProcessingJob, celery_task_id: str) -> ProcessingJob:
         job.celery_task_id = celery_task_id
         return job
 
@@ -259,7 +261,9 @@ def mock_meeting_repo() -> InMemoryMeetingRepository:
 
 
 @pytest.fixture
-def mock_recording_repo(mock_meeting_repo: InMemoryMeetingRepository) -> InMemoryRecordingRepository:
+def mock_recording_repo(
+    mock_meeting_repo: InMemoryMeetingRepository,
+) -> InMemoryRecordingRepository:
     repo = InMemoryRecordingRepository()
     orig_create = repo.create
 

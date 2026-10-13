@@ -23,9 +23,6 @@ from app.schemas.meeting import (
 )
 from app.services.meeting_service import MeetingNotFoundError, MeetingService
 from app.services.upload_service import (
-    UploadConflictError,
-    UploadDispatchError,
-    UploadNotFoundError,
     UploadService,
     UploadStorageError,
     UploadValidationError,
@@ -52,11 +49,15 @@ async def create_meeting(
 ) -> JSONResponse:
     """Creates a meeting and issues a pre-signed PUT URL for direct client upload."""
     try:
-        meeting, recording, upload_url, upload_token, expires_in = (
-            await upload_service.initiate_meeting_upload(
-                user_id=current_user.user_id,
-                request=payload,
-            )
+        (
+            meeting,
+            recording,
+            upload_url,
+            upload_token,
+            expires_in,
+        ) = await upload_service.initiate_meeting_upload(
+            user_id=current_user.user_id,
+            request=payload,
         )
     except UploadValidationError as err:
         return JSONResponse(

@@ -54,6 +54,15 @@ class MeetingRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_id_system(
+        self,
+        meeting_id: uuid.UUID,
+    ) -> Meeting | None:
+        """Retrieves a meeting by ID without user scope, for worker process."""
+        stmt = select(Meeting).where(Meeting.id == meeting_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def list_by_user(
         self,
         user_id: uuid.UUID,
@@ -87,12 +96,9 @@ class MeetingRepository:
         user_id: uuid.UUID,
     ) -> int:
         """Counts total non-purged meetings for a user."""
-        stmt = (
-            select(func.count(Meeting.id))
-            .where(
-                Meeting.user_id == user_id,
-                Meeting.status != MeetingStatus.PURGED,
-            )
+        stmt = select(func.count(Meeting.id)).where(
+            Meeting.user_id == user_id,
+            Meeting.status != MeetingStatus.PURGED,
         )
         result = await self.session.execute(stmt)
         return result.scalar_one() or 0
@@ -103,7 +109,9 @@ class MeetingRepository:
         user_id: uuid.UUID,
     ) -> Meeting | None:
         """Transitions meeting to DELETING state, blocking read/write access."""
-        meeting = await self.get_by_id(meeting_id=meeting_id, user_id=user_id, include_relations=True)
+        meeting = await self.get_by_id(
+            meeting_id=meeting_id, user_id=user_id, include_relations=True
+        )
         if meeting is None or meeting.status in (MeetingStatus.DELETING, MeetingStatus.PURGED):
             return None
         meeting.status = MeetingStatus.DELETING
@@ -117,7 +125,9 @@ class MeetingRepository:
         user_id: uuid.UUID,
     ) -> bool:
         """Permanently removes meeting row or marks PURGED after cleanup."""
-        meeting = await self.get_by_id(meeting_id=meeting_id, user_id=user_id, include_relations=True)
+        meeting = await self.get_by_id(
+            meeting_id=meeting_id, user_id=user_id, include_relations=True
+        )
         if meeting is None:
             return False
         await self.session.delete(meeting)

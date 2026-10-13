@@ -20,16 +20,34 @@ class TranscriptRepository:
         user_id: uuid.UUID,
         provider: str,
         language: str | None = None,
+        model: str | None = None,
+        diarization_provider: str | None = None,
+        total_duration_seconds: float | None = None,
+        segment_count: int | None = None,
+        raw_transcript_text: str | None = None,
     ) -> Transcript:
         transcript = Transcript(
             meeting_id=meeting_id,
             user_id=user_id,
             provider=provider,
             language=language,
+            model=model,
+            diarization_provider=diarization_provider,
+            total_duration_seconds=total_duration_seconds,
+            segment_count=segment_count,
+            raw_transcript_text=raw_transcript_text,
         )
         self.session.add(transcript)
         await self.session.flush()
         return transcript
+
+    async def delete_segments(self, transcript_id: uuid.UUID) -> None:
+        """Deletes existing segments for idempotency on rerun."""
+        from sqlalchemy import delete
+
+        stmt = delete(TranscriptSegment).where(TranscriptSegment.transcript_id == transcript_id)
+        await self.session.execute(stmt)
+        await self.session.flush()
 
     async def get_by_meeting_id(
         self,

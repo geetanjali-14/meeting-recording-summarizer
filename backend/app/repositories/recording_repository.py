@@ -62,6 +62,15 @@ class RecordingRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_meeting_id_system(
+        self,
+        meeting_id: uuid.UUID,
+    ) -> Recording | None:
+        """Fetches recording by meeting ID without user scope, for worker background task."""
+        stmt = select(Recording).where(Recording.meeting_id == meeting_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def mark_uploaded(
         self,
         recording: Recording,

@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from jose import JWTError, jwt
+from jose import JWTError, jwt  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field
 
 from app.core.config import Settings, get_settings

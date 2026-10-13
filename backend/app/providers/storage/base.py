@@ -32,3 +32,8 @@ class StorageProvider(ABC):
     def object_exists(self, storage_key: str) -> bool:
         """Checks if an object exists in storage."""
         pass
+
+    @abstractmethod
+    def download_file(self, storage_key: str, destination_path: str) -> None:
+        """Downloads an object from storage to a local file path."""
+        pass

@@ -3,7 +3,13 @@ import uuid
 
 from fastapi import Request
 
-from app.schemas.envelope import ErrorDetail, ErrorEnvelope, ErrorPayload, ListResponseMeta, ResponseMeta
+from app.schemas.envelope import (
+    ErrorDetail,
+    ErrorEnvelope,
+    ErrorPayload,
+    ListResponseMeta,
+    ResponseMeta,
+)
 
 
 def get_request_id(request: Request) -> str:
@@ -57,4 +63,3 @@ def create_error_envelope(
             request_id=get_request_id(request),
         )
     )
-

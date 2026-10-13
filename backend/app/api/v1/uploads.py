@@ -68,9 +68,7 @@ async def confirm_upload(
     except UploadConflictError as err:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content=create_error_envelope("CONFLICT", err.message, request).model_dump(
-                mode="json"
-            ),
+            content=create_error_envelope("CONFLICT", err.message, request).model_dump(mode="json"),
         )
     except UploadStorageError as err:
         return JSONResponse(

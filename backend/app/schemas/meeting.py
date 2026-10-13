@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 ALLOWED_CONTENT_TYPES = {
@@ -85,4 +86,3 @@ class MeetingDetailResponseData(BaseModel):
     created_at: datetime
     recording: MeetingRecordingDetail | None = None
     job: MeetingJobDetail | None = None
-

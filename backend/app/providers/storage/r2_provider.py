@@ -61,3 +61,10 @@ class R2StorageProvider(StorageProvider):
             return True
         except Exception:
             return False
+
+    def download_file(self, storage_key: str, destination_path: str) -> None:
+        self.client.download_file(
+            Bucket=self.bucket_name,
+            Key=storage_key,
+            Filename=destination_path,
+        )

@@ -1,10 +1,7 @@
 import datetime
 import uuid
 
-import pytest
-
 from app.core.config import Settings
-from app.providers.storage.r2_provider import R2StorageProvider
 from app.services.upload_service import UploadService
 
 
@@ -99,4 +96,3 @@ def test_upload_token_tampering_and_expiration_defense() -> None:
         )
         is False
     )
-

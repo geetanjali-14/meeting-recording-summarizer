@@ -1,4 +1,5 @@
 import uuid
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -18,4 +19,3 @@ class ConfirmUploadResponseData(BaseModel):
     job_id: uuid.UUID
     status: str
     job_status: str
-

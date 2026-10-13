@@ -41,3 +41,21 @@ def test_r2_storage_provider_url_generation() -> None:
         expires_in_seconds=3600,
     )
     assert download_url.startswith("https://test-account.r2.cloudflarestorage.com")
+
+
+def test_r2_storage_provider_download_file() -> None:
+    settings = Settings(
+        STORAGE_BUCKET_NAME="test-recordings",
+        STORAGE_ENDPOINT_URL="https://test-account.r2.cloudflarestorage.com",
+        STORAGE_ACCESS_KEY_ID="test_access_key",
+        STORAGE_SECRET_ACCESS_KEY="test_secret_key",
+    )
+    provider = R2StorageProvider(settings)
+    provider.client = MagicMock()
+
+    provider.download_file("users/u1/audio.wav", "/tmp/dest.wav")
+    provider.client.download_file.assert_called_once_with(
+        Bucket="test-recordings",
+        Key="users/u1/audio.wav",
+        Filename="/tmp/dest.wav",
+    )

@@ -106,13 +106,15 @@ class UploadService:
         """Verifies token signature, expiration, and binding to meeting, recording, and user."""
         if not token.startswith("up_tok_") or "." not in token:
             return False
-        stripped = token[len("up_tok_"):]
+        stripped = token[len("up_tok_") :]
         parts = stripped.split(".")
         if len(parts) != 2:
             return False
         payload_b64, signature = parts
         secret = self.settings.JWT_SIGNING_KEY_OR_JWKS.encode("utf-8")
-        expected_signature = hmac.new(secret, payload_b64.encode("utf-8"), hashlib.sha256).hexdigest()
+        expected_signature = hmac.new(
+            secret, payload_b64.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
         if not hmac.compare_digest(signature, expected_signature):
             return False
         try:

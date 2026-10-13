@@ -47,7 +47,9 @@ def create_app() -> FastAPI:
 
     # Global Exception Handlers ensuring standard envelope compliance
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
         details = []
         for error in exc.errors():
             field_loc = ".".join(str(loc) for loc in error.get("loc", []))
