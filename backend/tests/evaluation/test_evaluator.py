@@ -123,3 +123,85 @@ def test_dataset_loader_loads_all_fields() -> None:
     assert len(ds["diarization_truth"]) > 0
     assert "phantom_owners" in ds["known_negatives"]
 
+
+def test_evaluator_hand_calculated_der_scenarios() -> None:
+    """Verifies DER calculation against hand-calculated ground-truth scenarios."""
+    ref_turns = [
+        {"start_time": 0.0, "end_time": 2.0, "speaker_label": "SPEAKER_00"},
+        {"start_time": 2.0, "end_time": 4.0, "speaker_label": "SPEAKER_01"},
+    ]
+
+    # Scenario 1: Perfect match -> DER = 0.0
+    hyp_perf = [
+        {"start_time": 0.0, "end_time": 2.0, "speaker_label": "SPEAKER_00"},
+        {"start_time": 2.0, "end_time": 4.0, "speaker_label": "SPEAKER_01"},
+    ]
+    res_perf = Evaluator.calculate_der(ref_turns, hyp_perf, step_seconds=0.1)
+    assert res_perf.der == 0.0
+    assert res_perf.missed_speech_rate == 0.0
+    assert res_perf.false_alarm_rate == 0.0
+    assert res_perf.speaker_confusion_rate == 0.0
+
+    # Scenario 2: Complete missed speech on turn 2 (2.0s out of 4.0s missed) -> DER = 0.50
+    hyp_miss = [{"start_time": 0.0, "end_time": 2.0, "speaker_label": "SPEAKER_00"}]
+    res_miss = Evaluator.calculate_der(ref_turns, hyp_miss, step_seconds=0.1)
+    assert res_miss.missed_speech_rate == pytest.approx(0.50, rel=1e-2)
+    assert res_miss.der == pytest.approx(0.50, rel=1e-2)
+
+    # Scenario 3: False alarm of 1.0s over a 4.0s reference session -> DER = 0.25
+    hyp_fa = [
+        {"start_time": 0.0, "end_time": 2.0, "speaker_label": "SPEAKER_00"},
+        {"start_time": 2.0, "end_time": 4.0, "speaker_label": "SPEAKER_01"},
+        {"start_time": 4.0, "end_time": 5.0, "speaker_label": "SPEAKER_01"},  # 1s false alarm
+    ]
+    res_fa = Evaluator.calculate_der(ref_turns, hyp_fa, step_seconds=0.1)
+    assert res_fa.false_alarm_rate == pytest.approx(0.25, rel=1e-2)
+    assert res_fa.der == pytest.approx(0.25, rel=1e-2)
+
+
+def test_evaluator_hand_calculated_extraction_metrics() -> None:
+    """Verifies extraction precision, recall, and F1 against hand-calculated values.
+
+    Expected: 4 items (A, B, C, D)
+    Extracted: 3 items (A, B, X) -> Matched: 2 (A, B)
+    Precision = 2 / 3 = ~0.6667
+    Recall = 2 / 4 = 0.5000
+    F1 = 2 * (2/3 * 1/2) / (2/3 + 1/2) = (2/3) / (7/6) = 4/7 = ~0.5714
+    """
+    expected = [
+        {"action_text": "Configure database pooling connection strings"},
+        {"action_text": "Implement Celery Redis rate limiting decorator"},
+        {"action_text": "Deploy staging cluster to Fly.io"},
+        {"action_text": "Audit Cloudflare R2 bucket credentials"},
+    ]
+    extracted = [
+        {"action_text": "Configure database pooling connection strings"},
+        {"action_text": "Implement Celery Redis rate limiting decorator"},
+        {"action_text": "Unrelated extraneous task entirely absent from meeting"},
+    ]
+    metrics = Evaluator.evaluate_extraction_match(expected, extracted, text_key="action_text")
+    assert metrics.matched_count == 2
+    assert metrics.reference_count == 4
+    assert metrics.hypothesis_count == 3
+    assert metrics.precision == pytest.approx(2 / 3, rel=1e-3)
+    assert metrics.recall == pytest.approx(0.5, rel=1e-3)
+    assert metrics.f1 == pytest.approx(4 / 7, rel=1e-3)
+
+
+def test_evaluator_hand_calculated_cost_calculations() -> None:
+    """Verifies STT and LLM cost calculations against hand-calculated values."""
+    # STT: 1800s (0.5 hours) at $0.04/hr -> $0.020000
+    stt_cost = Evaluator.calculate_stt_cost(audio_duration_seconds=1800.0, cost_per_hour_usd=0.04)
+    assert stt_cost == 0.02
+
+    # LLM: 10,000 prompt tokens @ $0.15/1M ($0.00000015/tok) = $0.0015
+    #      2,000 completion tokens @ $0.60/1M ($0.00000060/tok) = $0.0012
+    # Total = $0.0027
+    llm_cost = Evaluator.calculate_llm_cost(
+        prompt_tokens=10000,
+        completion_tokens=2000,
+        prompt_rate_per_token=0.00000015,
+        completion_rate_per_token=0.00000060,
+    )
+    assert llm_cost == pytest.approx(0.0027, rel=1e-4)
+

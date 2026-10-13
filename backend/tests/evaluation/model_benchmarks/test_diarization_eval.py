@@ -1,12 +1,16 @@
-"""Speaker Diarization Benchmark.
+"""Speaker Diarization Benchmark (Offline Simulation & Metric Verification).
 
-Evaluates Diarization model candidates:
-- pyannote Community-1 (initial baseline)
+Evaluates Diarization metrics against simulated offline hypotheses:
+- pyannote Community-1 (initial baseline candidate)
 
 Metrics evaluated:
 1. Diarization Error Rate (DER <= 0.20 target)
 2. Speaker Count Accuracy
 3. Whisper Segment Alignment Overlap
+
+NOTE: Live model execution with pyannote pipeline requires HuggingFace token and local
+GPU/torch runtime; these fixture-based tests evaluate deterministic DER scoring logic.
+Live model evaluation remains explicitly marked as pending live pipeline validation.
 """
 
 from __future__ import annotations
@@ -46,6 +50,7 @@ def test_diarization_eval_benchmark(dataset_name: str) -> None:
     assert result.speaker_count_accuracy == 1.0
     assert result.whisper_alignment_overlap > 0.90
     assert result.speaker_confusion_rate == 0.0
+    assert result.is_live_measurement is False
 
 
 def test_diarization_flags_speaker_confusion_and_missing_speakers() -> None:

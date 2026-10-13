@@ -30,6 +30,17 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+class STTPricingAssumptions(BaseModel):
+    cost_per_hour_usd: float = 0.04
+    pricing_source: str = "Groq published rates (October 2026)"
+
+
+class LLMPricingAssumptions(BaseModel):
+    prompt_rate_per_token: float
+    completion_rate_per_token: float
+    pricing_version: str = "2026-10-v1"
+
+
 class WERMetrics(BaseModel):
     wer: float
     substitutions: int
@@ -49,6 +60,9 @@ class STTBenchmarkResult(BaseModel):
     real_time_factor: float
     cost_per_hour_usd: float
     passed: bool
+    is_live_measurement: bool = False
+    cost_is_estimated: bool = True
+    pricing_assumptions: str = "Groq published rates (October 2026)"
 
 
 class DiarizationBenchmarkResult(BaseModel):
@@ -62,6 +76,7 @@ class DiarizationBenchmarkResult(BaseModel):
     speaker_count_accuracy: float
     whisper_alignment_overlap: float
     passed: bool
+    is_live_measurement: bool = False
 
 
 class ExtractionMetrics(BaseModel):
@@ -101,6 +116,9 @@ class LLMBenchmarkResult(BaseModel):
     completion_tokens: int
     estimated_cost_usd: float
     passed: bool
+    is_live_measurement: bool = False
+    cost_is_estimated: bool = True
+    pricing_assumptions: str = "PRICING_RATES 2026-10-v1"
 
 
 # ---------------------------------------------------------------------------
@@ -563,7 +581,33 @@ class Evaluator:
         )
 
     # -----------------------------------------------------------------------
-    # 4. Dataset Loader
+    # 4. Cost Calculations (Configurable assumptions, distinguishing estimates)
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def calculate_llm_cost(
+        prompt_tokens: int,
+        completion_tokens: int,
+        prompt_rate_per_token: float,
+        completion_rate_per_token: float,
+    ) -> float:
+        """Calculates estimated LLM inference cost based on explicit pricing assumptions."""
+        cost = (prompt_tokens * prompt_rate_per_token) + (
+            completion_tokens * completion_rate_per_token
+        )
+        return round(float(cost), 6)
+
+    @staticmethod
+    def calculate_stt_cost(
+        audio_duration_seconds: float,
+        cost_per_hour_usd: float,
+    ) -> float:
+        """Calculates estimated STT transcription cost based on duration and hourly rate."""
+        hours = audio_duration_seconds / 3600.0
+        return round(hours * cost_per_hour_usd, 6)
+
+    # -----------------------------------------------------------------------
+    # 5. Dataset Loader
     # -----------------------------------------------------------------------
 
     @staticmethod

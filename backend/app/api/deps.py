@@ -114,6 +114,30 @@ def get_meeting_service(
     return MeetingService(meeting_repo=meeting_repo, storage_provider=storage_provider)
 
 
+def get_transcript_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> "TranscriptRepository":
+    from app.repositories.transcript_repository import TranscriptRepository
+
+    return TranscriptRepository(session)
+
+
+def get_chat_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> "ChatRepository":
+    from app.repositories.chat_repository import ChatRepository
+
+    return ChatRepository(session)
+
+
+def get_llm_provider(
+    settings: Settings = Depends(get_settings),
+) -> "LLMProvider":
+    from app.providers.llm import get_llm_provider as get_llm_provider_factory
+
+    return get_llm_provider_factory(settings)
+
+
 def get_upload_service(
     meeting_repo: MeetingRepository = Depends(get_meeting_repository),
     recording_repo: RecordingRepository = Depends(get_recording_repository),
@@ -128,5 +152,23 @@ def get_upload_service(
         recording_repo=recording_repo,
         job_repo=job_repo,
         storage_provider=storage_provider,
+        settings=settings,
+    )
+
+
+def get_chat_service(
+    meeting_repo: MeetingRepository = Depends(get_meeting_repository),
+    transcript_repo: "TranscriptRepository" = Depends(get_transcript_repository),
+    chat_repo: "ChatRepository" = Depends(get_chat_repository),
+    llm_provider: "LLMProvider" = Depends(get_llm_provider),
+    settings: Settings = Depends(get_settings),
+) -> "ChatService":
+    from app.services.chat_service import ChatService
+
+    return ChatService(
+        meeting_repo=meeting_repo,
+        transcript_repo=transcript_repo,
+        chat_repo=chat_repo,
+        llm_provider=llm_provider,
         settings=settings,
     )

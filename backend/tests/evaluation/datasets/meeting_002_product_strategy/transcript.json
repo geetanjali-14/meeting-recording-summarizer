@@ -3,23 +3,23 @@
     "id": "22222222-2222-2222-2222-222222222201",
     "sequence_index": 0,
     "start_time": 0.0,
-    "end_time": 6.0,
+    "end_time": 6.8,
     "speaker_label": "SPEAKER_00",
     "text": "Welcome everyone. In this product roadmap sync we will review the enterprise SSO launch requirements."
   },
   {
     "id": "22222222-2222-2222-2222-222222222202",
     "sequence_index": 1,
-    "start_time": 6.2,
-    "end_time": 14.5,
+    "start_time": 7.1,
+    "end_time": 14.92,
     "speaker_label": "SPEAKER_01",
     "text": "We decided to require SAML 2.0 with Okta for Q4 enterprise customers and defer SCIM provisioning to Q1."
   },
   {
     "id": "22222222-2222-2222-2222-222222222203",
     "sequence_index": 2,
-    "start_time": 15.0,
-    "end_time": 21.0,
+    "start_time": 15.22,
+    "end_time": 21.07,
     "speaker_label": "SPEAKER_00",
     "text": "Carol, please draft the SAML security architecture specification by November 15th."
   },
@@ -27,17 +27,16 @@
     "id": "22222222-2222-2222-2222-222222222204",
     "sequence_index": 3,
     "start_time": 21.5,
-    "end_time": 28.0,
+    "end_time": 29.29,
     "speaker_label": "SPEAKER_01",
     "text": "Understood. Notice that enterprise customers might reject self-signed IdP metadata without valid TLS certificates."
   },
   {
     "id": "22222222-2222-2222-2222-222222222205",
     "sequence_index": 4,
-    "start_time": 28.5,
-    "end_time": 35.0,
+    "start_time": 29.59,
+    "end_time": 36.43,
     "speaker_label": "SPEAKER_00",
     "text": "Good point. We should also investigate if multi-tenant isolation supports separate IdP discovery."
   }
 ]
-

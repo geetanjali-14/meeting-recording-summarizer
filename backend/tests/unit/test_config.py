@@ -28,8 +28,10 @@ def test_production_mode_rejects_localhost_db() -> None:
     with pytest.raises(ValidationError, match="DATABASE_URL cannot use localhost in production"):
         Settings(
             APP_ENV="production",
+            DEBUG=False,
             DATABASE_URL="postgresql+psycopg://user:pass@localhost:5432/dbname",
             STORAGE_ACCESS_KEY_ID="valid_key",
+            STORAGE_SECRET_ACCESS_KEY="valid_secret",
             LLM_API_KEY="valid_key",
         )
 

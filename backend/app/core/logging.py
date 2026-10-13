@@ -45,8 +45,14 @@ class JSONFormatter(logging.Formatter):
             "duration_ms",
         ):
             val = getattr(record, attr, None)
-            if val is not None:
+            if val is not None and attr.lower() not in self.REDACTED_KEYS:
                 log_payload[attr] = val
+
+        # Also redact any record __dict__ sensitive items
+        for k, v in record.__dict__.items():
+            if any(secret_term in k.lower() for secret_term in self.REDACTED_KEYS):
+                # Ensure it is never leaked even if added dynamically
+                log_payload.pop(k, None)
 
         if record.exc_info:
             log_payload["exception"] = self.formatException(record.exc_info)

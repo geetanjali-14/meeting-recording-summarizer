@@ -13,6 +13,7 @@ import ProcessingStatus from "@/components/ProcessingStatus";
 import SpeakerMapper from "@/components/SpeakerMapper";
 import TranscriptViewer from "@/components/TranscriptViewer";
 import MeetingIntelligence from "@/components/MeetingIntelligence";
+import MeetingChat from "@/components/MeetingChat";
 
 export default function MeetingDetailPage() {
   const params = useParams();
@@ -198,8 +199,8 @@ export default function MeetingDetailPage() {
 
           {/* Dual Panel Layout: Intelligence (Left) & Transcript (Right) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left Column: Structured Intelligence */}
-            <div className="lg:col-span-7">
+            {/* Left Column: Structured Intelligence & Interactive Q&A */}
+            <div className="lg:col-span-7 space-y-6">
               {analysis ? (
                 <MeetingIntelligence
                   analysis={analysis}
@@ -211,6 +212,12 @@ export default function MeetingDetailPage() {
                   <p className="text-sm">Analysis results are not yet available.</p>
                 </div>
               )}
+
+              {/* Conversational Q&A Panel */}
+              <MeetingChat
+                meetingId={meetingId}
+                onSelectSegment={handleEvidenceClick}
+              />
             </div>
 
             {/* Right Column: Synchronized Transcript */}

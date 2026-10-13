@@ -6,7 +6,7 @@ from sqlalchemy import Enum, ForeignKey, String
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.meeting import Meeting
@@ -48,7 +48,7 @@ class ChatSession(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
 
-class ChatMessage(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+class ChatMessage(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     """Individual conversation message with citation links."""
 
     __tablename__ = "chat_messages"

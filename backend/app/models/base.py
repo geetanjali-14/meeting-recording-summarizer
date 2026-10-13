@@ -39,3 +39,14 @@ class TimestampMixin:
         server_default=text("NOW()"),
         nullable=False,
     )
+
+
+class CreatedAtMixin:
+    """Provides only created_at timezone-aware timestamp for append-only tables."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        server_default=text("NOW()"),
+        nullable=False,
+    )

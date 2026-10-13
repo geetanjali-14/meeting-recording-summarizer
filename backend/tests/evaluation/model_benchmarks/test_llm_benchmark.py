@@ -1,7 +1,7 @@
-"""LLM Meeting Intelligence Analysis Benchmark.
+"""LLM Meeting Intelligence Analysis Benchmark (Offline Simulation & Metric Verification).
 
-Evaluates LLM model candidates:
-- Groq GPT-OSS 120B (Quality candidate)
+Evaluates LLM analysis scoring mechanics and pricing models against reference hypotheses:
+- Groq GPT-OSS 120B (Quality candidate baseline)
 - Groq GPT-OSS 20B (Cost candidate)
 
 Metrics evaluated:
@@ -9,7 +9,11 @@ Metrics evaluated:
 2. Extraction Recall, Precision, and F1 (Decisions, Action Items, Topics)
 3. Zero-Hallucination Rate (0.0% phantom owners/deadlines; 100% precision on known negatives)
 4. Evidence Citation Accuracy (evidence_segment_ids must exist in transcript)
-5. Latency & Token Cost Efficiency (calculated via PRICING_RATES)
+5. Token Cost Efficiency & Projected Latency (calculated via explicit PRICING_RATES)
+
+NOTE: These tests run against offline deterministic fixtures to verify evaluator scoring,
+citation validation, and pricing models without requiring live API credentials. Live
+provider model benchmark runs remain marked as pending live evaluation.
 """
 
 from __future__ import annotations
@@ -26,7 +30,7 @@ from app.schemas.analysis import (
     MeetingAnalysisOutput,
     TopicOutput,
 )
-from app.services.analysis_service import PRICING_RATES
+from app.services.analysis_service import PRICING_RATES, PRICING_VERSION
 from tests.evaluation.evaluator import Evaluator, LLMBenchmarkResult
 
 DATASET_ROOT = Path(__file__).resolve().parent.parent / "datasets"
@@ -42,7 +46,7 @@ def test_llm_benchmark_candidates(dataset_name: str) -> None:
     transcript_segments = dataset["transcript"]
     known_negatives = dataset["known_negatives"]
 
-    # Build Candidate 1: GPT-OSS 120B (High Quality, 100% Schema Adherence, Zero Hallucinations)
+    # Build Candidate 1: GPT-OSS 120B (High Quality fixture hypothesis)
     decisions_120b = [
         DecisionOutput(
             decision_text=d["decision_text"],
@@ -118,12 +122,15 @@ def test_llm_benchmark_candidates(dataset_name: str) -> None:
     assert citation_res.accuracy == 1.0
     assert len(citation_res.invalid_segment_ids) == 0
 
-    # 5. Pricing and Performance Comparison
+    # 5. Pricing and Performance Comparison using explicit assumptions
     prompt_tokens_120b = 1500
     completion_tokens_120b = 450
     rate_120b = PRICING_RATES["openai/gpt-oss-120b"]
-    cost_120b = float(
-        rate_120b["prompt"] * prompt_tokens_120b + rate_120b["completion"] * completion_tokens_120b
+    cost_120b = Evaluator.calculate_llm_cost(
+        prompt_tokens=prompt_tokens_120b,
+        completion_tokens=completion_tokens_120b,
+        prompt_rate_per_token=float(rate_120b["prompt"]),
+        completion_rate_per_token=float(rate_120b["completion"]),
     )
 
     result_120b = LLMBenchmarkResult(
@@ -138,13 +145,21 @@ def test_llm_benchmark_candidates(dataset_name: str) -> None:
         completion_tokens=completion_tokens_120b,
         estimated_cost_usd=cost_120b,
         passed=True,
+        is_live_measurement=False,
+        cost_is_estimated=True,
+        pricing_assumptions=f"PRICING_RATES {PRICING_VERSION}",
     )
     assert result_120b.passed is True
+    assert result_120b.is_live_measurement is False
+    assert result_120b.cost_is_estimated is True
 
     # Candidate 2: GPT-OSS 20B (Cost Candidate - 3x cheaper, smaller parameter size)
     rate_20b = PRICING_RATES["openai/gpt-oss-20b"]
-    cost_20b = float(
-        rate_20b["prompt"] * prompt_tokens_120b + rate_20b["completion"] * completion_tokens_120b
+    cost_20b = Evaluator.calculate_llm_cost(
+        prompt_tokens=prompt_tokens_120b,
+        completion_tokens=completion_tokens_120b,
+        prompt_rate_per_token=float(rate_20b["prompt"]),
+        completion_rate_per_token=float(rate_20b["completion"]),
     )
     assert cost_20b < cost_120b
     assert cost_20b == pytest.approx(cost_120b / 3.0, rel=1e-2)

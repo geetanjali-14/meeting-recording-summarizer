@@ -107,10 +107,16 @@ class Settings(BaseSettings):
     def validate_production_settings(self) -> "Settings":
         """Enforces stricter requirements in production environment."""
         if self.APP_ENV == "production":
+            if self.DEBUG:
+                raise ValueError("DEBUG must be False in production.")
             if "localhost" in self.DATABASE_URL or "127.0.0.1" in self.DATABASE_URL:
                 raise ValueError("DATABASE_URL cannot use localhost in production.")
+            if "localhost" in self.REDIS_URL or "127.0.0.1" in self.REDIS_URL:
+                raise ValueError("REDIS_URL cannot use localhost in production.")
             if "placeholder" in self.STORAGE_ACCESS_KEY_ID:
                 raise ValueError("Valid STORAGE_ACCESS_KEY_ID is required in production.")
+            if "placeholder" in self.STORAGE_SECRET_ACCESS_KEY:
+                raise ValueError("Valid STORAGE_SECRET_ACCESS_KEY is required in production.")
             if "placeholder" in self.LLM_API_KEY and self.LLM_PROVIDER != "mock":
                 raise ValueError("Valid LLM_API_KEY is required in production.")
             if "dev-insecure-secret-key" in self.JWT_SIGNING_KEY_OR_JWKS:

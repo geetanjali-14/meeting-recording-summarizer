@@ -18,12 +18,22 @@ from app.services.meeting_service import MeetingNotFoundError
 from tests.security.test_tenant_isolation import create_token
 
 
+ORIGINAL_CREATE_LIMIT = create_meeting_limiter.max_requests
+ORIGINAL_CONFIRM_LIMIT = confirm_upload_limiter.max_requests
+ORIGINAL_STATUS_LIMIT = status_polling_limiter.max_requests
+ORIGINAL_READ_LIMIT = general_read_limiter.max_requests
+
+
 @pytest.fixture(autouse=True)
 def reset_limiters() -> None:
     create_meeting_limiter.reset()
     confirm_upload_limiter.reset()
     status_polling_limiter.reset()
     general_read_limiter.reset()
+    create_meeting_limiter.max_requests = ORIGINAL_CREATE_LIMIT
+    confirm_upload_limiter.max_requests = ORIGINAL_CONFIRM_LIMIT
+    status_polling_limiter.max_requests = ORIGINAL_STATUS_LIMIT
+    general_read_limiter.max_requests = ORIGINAL_READ_LIMIT
 
 
 def test_sliding_window_rate_limiter_unit_logic() -> None:

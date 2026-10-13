@@ -175,3 +175,26 @@ export interface MeetingAnalysisData {
   open_questions: OpenQuestionItem[];
 }
 
+export interface ChatCitation {
+  segment_id: string;
+  start_time: number;
+  end_time: number;
+  speaker: string | null;
+  text_snippet: string | null;
+}
+
+export interface ChatMessageItem {
+  message_id: string;
+  session_id: string;
+  meeting_id: string;
+  role: "USER" | "ASSISTANT" | "SYSTEM";
+  content: string;
+  citations: ChatCitation[];
+  created_at: string;
+}
+
+export interface ChatResponseData {
+  session_id: string;
+  message: ChatMessageItem;
+}
+
