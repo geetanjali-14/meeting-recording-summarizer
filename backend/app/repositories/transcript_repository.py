@@ -41,6 +41,34 @@ class TranscriptRepository:
         await self.session.flush()
         return transcript
 
+    async def update_transcript(
+        self,
+        transcript: Transcript,
+        provider: str,
+        language: str | None = None,
+        model: str | None = None,
+        diarization_provider: str | None = None,
+        total_duration_seconds: float | None = None,
+        segment_count: int | None = None,
+        raw_transcript_text: str | None = None,
+    ) -> Transcript:
+        """Updates top-level transcript metadata upon rerun/reprocessing."""
+        transcript.provider = provider
+        if language is not None:
+            transcript.language = language
+        if model is not None:
+            transcript.model = model
+        if diarization_provider is not None:
+            transcript.diarization_provider = diarization_provider
+        if total_duration_seconds is not None:
+            transcript.total_duration_seconds = total_duration_seconds
+        if segment_count is not None:
+            transcript.segment_count = segment_count
+        if raw_transcript_text is not None:
+            transcript.raw_transcript_text = raw_transcript_text
+        await self.session.flush()
+        return transcript
+
     async def delete_segments(self, transcript_id: uuid.UUID) -> None:
         """Deletes existing segments for idempotency on rerun."""
         from sqlalchemy import delete

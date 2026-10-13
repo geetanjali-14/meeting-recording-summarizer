@@ -8,13 +8,16 @@ from celery import Task  # type: ignore[import-untyped]
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.database import get_session
+from app.providers.diarization import get_diarization_provider
 from app.providers.storage import get_storage_provider
 from app.providers.transcription import get_transcription_provider
 from app.repositories.job_repository import JobRepository
 from app.repositories.meeting_repository import MeetingRepository
 from app.repositories.recording_repository import RecordingRepository
 from app.repositories.transcript_repository import TranscriptRepository
+from app.services.alignment_service import AlignmentService
 from app.services.audio_service import AudioService
+from app.services.diarization_service import DiarizationService
 from app.services.processing_service import ProcessingPipelineError, ProcessingService
 from app.workers.job_lease import JobLeaseTracker
 
@@ -62,6 +65,9 @@ def process_meeting_recording(self: Task, job_id_str: str, meeting_id_str: str) 
             storage_provider = get_storage_provider(settings)
             audio_service = AudioService()
             transcription_provider = get_transcription_provider(settings)
+            diarization_provider = get_diarization_provider(settings)
+            diarization_service = DiarizationService(diarization_provider, settings)
+            alignment_service = AlignmentService()
             lease_tracker = JobLeaseTracker(
                 session,
                 lease_duration_seconds=settings.WORKER_LEASE_DURATION_SECONDS,
@@ -76,6 +82,8 @@ def process_meeting_recording(self: Task, job_id_str: str, meeting_id_str: str) 
                 audio_service=audio_service,
                 transcription_provider=transcription_provider,
                 settings=settings,
+                diarization_service=diarization_service,
+                alignment_service=alignment_service,
             )
 
             job = await service.execute_job(

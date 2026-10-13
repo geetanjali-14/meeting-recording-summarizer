@@ -108,3 +108,16 @@ def test_groq_whisper_provider_client_error_permanent(mock_post: MagicMock) -> N
             provider.transcribe(tmp.name)
         assert exc_info.value.is_retryable is False
 
+
+def test_groq_whisper_provider_missing_credentials_fails_clearly() -> None:
+    settings = Settings(
+        TRANSCRIPTION_API_KEY="gsk_placeholder_groq_api_key",
+    )
+    provider = GroqWhisperProvider(settings)
+
+    with tempfile.NamedTemporaryFile() as tmp:
+        with pytest.raises(TranscriptionProviderError) as exc_info:
+            provider.transcribe(tmp.name)
+        assert "Missing or invalid Groq transcription API key" in str(exc_info.value)
+        assert exc_info.value.is_retryable is False
+

@@ -13,7 +13,9 @@ from app.repositories.job_repository import JobRepository
 from app.repositories.meeting_repository import MeetingRepository
 from app.repositories.recording_repository import RecordingRepository
 from app.repositories.transcript_repository import TranscriptRepository
+from app.services.alignment_service import AlignmentService
 from app.services.audio_service import AudioProcessingError, AudioService
+from app.services.diarization_service import DiarizationProcessingError, DiarizationService
 from app.workers.job_lease import JobLeaseTracker
 
 logger = logging.getLogger(__name__)
@@ -33,7 +35,7 @@ class ProcessingPipelineError(Exception):
 
 class ProcessingService:
     """Orchestrates recording download, media validation, FFmpeg normalization,
-    transcription, and transcript persistence.
+    transcription, speaker diarization, alignment, and transcript persistence.
     """
 
     def __init__(
@@ -46,6 +48,8 @@ class ProcessingService:
         audio_service: AudioService,
         transcription_provider: TranscriptionProvider,
         settings: Settings,
+        diarization_service: DiarizationService | None = None,
+        alignment_service: AlignmentService | None = None,
     ) -> None:
         self.job_repo = job_repo
         self.meeting_repo = meeting_repo
@@ -55,6 +59,8 @@ class ProcessingService:
         self.audio_service = audio_service
         self.transcription_provider = transcription_provider
         self.settings = settings
+        self.diarization_service = diarization_service
+        self.alignment_service = alignment_service or AlignmentService()
 
     async def execute_job(
         self,
@@ -183,13 +189,49 @@ class ProcessingService:
                         is_retryable=False,
                     ) from exc
 
-                # Stage 4: SAVING — Persist transcript and transcript_segments
+                # Stage 4: DIARIZING — Call Diarization provider and align with segments
+                await self.job_repo.update_stage(job=job, stage=JobStage.DIARIZING)
+                await lease_tracker.renew_heartbeat(job_id=job_id, worker_id=worker_id)
+
+                diarization_provider_name: str | None = None
+                if self.diarization_service:
+                    try:
+                        diarization_result = self.diarization_service.diarize_audio(local_wav_path)
+                        diarization_provider_name = diarization_result.provider
+                        transcription_result.segments = self.alignment_service.align(
+                            segments=transcription_result.segments,
+                            turns=diarization_result.turns,
+                        )
+                    except DiarizationProcessingError as exc:
+                        raise ProcessingPipelineError(
+                            f"Diarization failed: {exc.message}",
+                            error_code="DIARIZATION_FAILED",
+                            is_retryable=exc.is_retryable,
+                        ) from exc
+                    except Exception as exc:
+                        raise ProcessingPipelineError(
+                            f"Unexpected diarization error: {exc}",
+                            error_code="DIARIZATION_FAILED",
+                            is_retryable=False,
+                        ) from exc
+
+                # Stage 5: SAVING — Persist transcript and transcript_segments
                 await self.job_repo.update_stage(job=job, stage=JobStage.SAVING)
                 await lease_tracker.renew_heartbeat(job_id=job_id, worker_id=worker_id)
 
                 # Commit transcript records
                 if existing_transcript:
-                    transcript = existing_transcript
+                    transcript = await self.transcript_repo.update_transcript(
+                        transcript=existing_transcript,
+                        provider=transcription_result.provider,
+                        language=transcription_result.language,
+                        model=transcription_result.model,
+                        diarization_provider=diarization_provider_name,
+                        total_duration_seconds=transcription_result.total_duration_seconds
+                        or media_info.get("duration"),
+                        segment_count=len(transcription_result.segments),
+                        raw_transcript_text=transcription_result.raw_transcript_text,
+                    )
                     await self.transcript_repo.delete_segments(transcript.id)
                 else:
                     transcript = await self.transcript_repo.create_transcript(
@@ -198,6 +240,7 @@ class ProcessingService:
                         provider=transcription_result.provider,
                         language=transcription_result.language,
                         model=transcription_result.model,
+                        diarization_provider=diarization_provider_name,
                         total_duration_seconds=transcription_result.total_duration_seconds
                         or media_info.get("duration"),
                         segment_count=len(transcription_result.segments),
@@ -245,7 +288,9 @@ class ProcessingService:
                 exc.message,
                 exc.is_retryable,
             )
-            if exc.is_retryable and job.attempt < job.max_attempts:
+            attempt = job.attempt or 0
+            max_attempts = job.max_attempts or 3
+            if exc.is_retryable and attempt < max_attempts:
                 # Mark as PENDING so it can be re-attempted
                 await lease_tracker.release_lease(
                     job_id=job_id,

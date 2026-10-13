@@ -32,6 +32,13 @@ class GroqWhisperProvider(TranscriptionProvider):
                 f"Audio file does not exist: {audio_file_path}", is_retryable=False
             )
 
+        if not self.api_key or "placeholder" in self.api_key.lower():
+            raise TranscriptionProviderError(
+                "Missing or invalid Groq transcription API key. "
+                "Configure TRANSCRIPTION_API_KEY in environment.",
+                is_retryable=False,
+            )
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
         }

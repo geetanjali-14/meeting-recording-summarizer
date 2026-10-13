@@ -93,3 +93,33 @@ async def test_job_lease_stale_recovery() -> None:
     assert claimed.attempt == 2
     assert claimed.lease_expires_at is not None
     assert claimed.lease_expires_at > datetime.now(UTC)
+
+
+@pytest.mark.asyncio
+async def test_job_lease_concurrent_claim_skip_locked() -> None:
+    session = AsyncMock()
+    job_id = uuid.uuid4()
+
+    # Another worker already locked the row; scalar_one_or_none returns None due to skip_locked
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    session.execute.return_value = mock_result
+
+    tracker = JobLeaseTracker(session, lease_duration_seconds=120)
+    claimed = await tracker.claim_job(job_id=job_id, worker_id="worker-concurrent")
+    assert claimed is None
+
+
+@pytest.mark.asyncio
+async def test_terminal_jobs_cannot_be_claimed() -> None:
+    session = AsyncMock()
+    job_id = uuid.uuid4()
+
+    # When querying with status in (PENDING, RUNNING expired), COMPLETED returns None
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    session.execute.return_value = mock_result
+
+    tracker = JobLeaseTracker(session, lease_duration_seconds=120)
+    claimed = await tracker.claim_job(job_id=job_id, worker_id="worker-late")
+    assert claimed is None
