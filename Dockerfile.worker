@@ -1,0 +1,24 @@
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on
+
+WORKDIR /app
+
+# Install system dependencies including FFmpeg for audio extraction and normalization
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies
+COPY backend/pyproject.toml backend/README.md /app/
+RUN pip install .
+
+# Copy application source
+COPY backend/app /app/app
+
+CMD ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=INFO", "--concurrency=2", "--prefetch-multiplier=1", "-O", "fair"]
+

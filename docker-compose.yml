@@ -1,0 +1,96 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: meeting-summarizer-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: meeting_summarizer
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d meeting_summarizer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: meeting-summarizer-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: meeting-summarizer-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=Meeting Intelligence Summarizer
+      - APP_ENV=development
+      - DEBUG=true
+      - DATABASE_URL=postgresql+psycopg://postgres:postgrespassword@db:5432/meeting_summarizer
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=rpc://
+      - STORAGE_PROVIDER=mock
+      - LLM_PROVIDER=mock
+      - TRANSCRIPTION_PROVIDER=mock
+      - DIARIZATION_PROVIDER=mock
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: meeting-summarizer-worker
+    restart: unless-stopped
+    environment:
+      - APP_NAME=Meeting Intelligence Summarizer
+      - APP_ENV=development
+      - DATABASE_URL=postgresql+psycopg://postgres:postgrespassword@db:5432/meeting_summarizer
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=rpc://
+      - STORAGE_PROVIDER=mock
+      - LLM_PROVIDER=mock
+      - TRANSCRIPTION_PROVIDER=mock
+      - DIARIZATION_PROVIDER=mock
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: meeting-summarizer-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+
