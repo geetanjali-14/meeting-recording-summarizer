@@ -106,6 +106,38 @@ async def test_get_processing_status_tenant_isolation(
 
 
 @pytest.mark.asyncio
+async def test_database_error_handling_and_logging(
+    mock_user_context: UserContext,
+) -> None:
+    """Verifies that database operational/programming errors return 500 without leaking stack traces or credentials."""
+    app = create_app()
+    meeting_id = uuid.uuid4()
+
+    mock_session = AsyncMock()
+    # Simulate psycopg ProgrammingError / prepared statement error
+    mock_session.execute.side_effect = Exception("prepared statement '_pg3_7' does not exist")
+
+    app.dependency_overrides[get_current_user] = lambda: mock_user_context
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get(
+        f"/api/v1/meetings/{meeting_id}/status",
+        headers={"X-Request-ID": "test-req-tracing-123"},
+    )
+
+    assert response.status_code == 500
+    data = response.json()
+    assert "error" in data
+    assert data["error"]["code"] == "INTERNAL_ERROR"
+    assert data["error"]["message"] == "An unexpected internal server error occurred."
+    assert data["error"]["request_id"] == "test-req-tracing-123"
+    # Verify no raw exception or sql statement leaked to HTTP response
+    assert "_pg3_7" not in response.text
+    assert "ProgrammingError" not in response.text
+
+
+@pytest.mark.asyncio
 async def test_get_transcript_success(mock_user_context: UserContext) -> None:
     app = create_app()
     meeting_id = uuid.uuid4()
@@ -189,3 +221,57 @@ async def test_get_transcript_unauthenticated_rejected() -> None:
     meeting_id = uuid.uuid4()
     response = client.get(f"/api/v1/meetings/{meeting_id}/transcript")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_stream_processing_events_sse(mock_user_context: UserContext) -> None:
+    """Verifies that the /events endpoint connects and streams SSE events."""
+    app = create_app()
+    meeting_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+
+    mock_meeting = MagicMock()
+    mock_meeting.id = meeting_id
+    mock_meeting.user_id = mock_user_context.user_id
+
+    mock_job = MagicMock()
+    mock_job.id = job_id
+    mock_job.meeting_id = meeting_id
+    mock_job.celery_task_id = "test-task-123"
+    mock_job.status = JobStatus.COMPLETED
+    mock_job.stage = JobStage.COMPLETED
+    mock_job.attempt = 1
+    mock_job.error_code = None
+    mock_job.error_message = None
+    mock_job.started_at = None
+    mock_job.completed_at = None
+
+    mock_session = AsyncMock()
+    mock_result_meeting = MagicMock()
+    mock_result_meeting.scalar_one_or_none.return_value = mock_meeting
+    mock_result_job = MagicMock()
+    mock_result_job.scalar_one_or_none.return_value = mock_job
+
+    mock_session.execute.side_effect = [
+        mock_result_meeting,
+        mock_result_job,
+    ]
+
+    app.dependency_overrides[get_current_user] = lambda: mock_user_context
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    from unittest.mock import patch
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def mock_async_session_factory():
+        yield mock_session
+
+    with patch("app.api.v1.status.async_session_factory", side_effect=mock_async_session_factory):
+        client = TestClient(app)
+        response = client.get(f"/api/v1/meetings/{meeting_id}/events")
+
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers["content-type"]
+    assert "event: status" in response.text
+    assert "event: done" in response.text

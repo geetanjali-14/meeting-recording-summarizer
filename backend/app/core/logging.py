@@ -37,6 +37,9 @@ class JSONFormatter(logging.Formatter):
         # Include custom context attributes if present on record
         for attr in (
             "request_id",
+            "path",
+            "endpoint",
+            "status_code",
             "meeting_id",
             "job_id",
             "celery_task_id",

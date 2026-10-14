@@ -16,6 +16,9 @@ class JobStatusResponse(BaseModel):
     attempt: int = 0
     error_code: str | None = None
     error_message: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    elapsed_seconds: float | None = None
 
 
 class TranscriptSegmentResponse(BaseModel):

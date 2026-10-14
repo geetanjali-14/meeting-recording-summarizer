@@ -83,6 +83,7 @@ class AnalysisService:
         meeting_id: uuid.UUID,
         user_id: uuid.UUID,
         segments: list[TranscriptSegment],
+        on_stage_change: Any = None,
     ) -> MeetingAnalysis:
         """Executes full analysis workflow, verifying evidence and saving entities."""
         segment_map: dict[uuid.UUID, TranscriptSegment] = {s.id: s for s in segments}
@@ -113,6 +114,8 @@ class AnalysisService:
         verification_model: str | None = None
 
         if self.verification_agent:
+            if on_stage_change:
+                await on_stage_change()
             # Check action item owners
             for item in output.action_items:
                 item_cited = [

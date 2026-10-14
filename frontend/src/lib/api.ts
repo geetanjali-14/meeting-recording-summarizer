@@ -10,7 +10,7 @@ import {
 } from "@/types/api";
 import { getAccessToken } from "./auth";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export class ApiError extends Error {
   code: string;
@@ -119,7 +119,11 @@ export const api = {
     });
   },
 
-  // Status & Transcript
+  // Status, Realtime Events & Transcript
+  getEventsStreamUrl(meetingId: string, token: string): string {
+    return `${API_BASE_URL}/api/v1/meetings/${meetingId}/events?token=${encodeURIComponent(token)}`;
+  },
+
   async getStatus(meetingId: string): Promise<SuccessEnvelope<JobStatusResponse>> {
     return request<JobStatusResponse>(`/api/v1/meetings/${meetingId}/status`);
   },

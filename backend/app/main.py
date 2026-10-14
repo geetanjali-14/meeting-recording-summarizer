@@ -110,12 +110,19 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         """Sanitizes unexpected internal exceptions, preventing stack trace/credential leaks."""
+        from app.api.v1.utils import get_request_id
+
+        req_id = get_request_id(request)
         logger.error(
             "Unhandled server exception on %s: %s",
             request.url.path,
             exc,
             exc_info=True,
-            extra={"path": request.url.path},
+            extra={
+                "path": request.url.path,
+                "request_id": req_id,
+                "endpoint": request.url.path,
+            },
         )
         envelope = create_error_envelope(
             code="INTERNAL_ERROR",

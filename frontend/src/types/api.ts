@@ -94,6 +94,9 @@ export interface JobStatusResponse {
   attempt: number;
   error_code: string | null;
   error_message: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  elapsed_seconds?: number | null;
 }
 
 export interface TranscriptSegment {

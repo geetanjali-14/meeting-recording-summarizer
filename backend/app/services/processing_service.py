@@ -280,11 +280,17 @@ class ProcessingService:
                     db_segments = await self.transcript_repo.get_segments_by_transcript(
                         transcript.id
                     )
+
+                    async def record_verifying_stage():
+                        await self.job_repo.update_stage(job=job, stage=JobStage.VERIFYING)
+                        await lease_tracker.renew_heartbeat(job_id=job_id, worker_id=worker_id)
+
                     try:
                         await self.analysis_service.execute_analysis(
                             meeting_id=meeting_id,
                             user_id=job.user_id,
                             segments=list(db_segments),
+                            on_stage_change=record_verifying_stage,
                         )
                     except Exception as exc:
                         raise ProcessingPipelineError(

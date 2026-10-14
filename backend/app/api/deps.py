@@ -2,7 +2,7 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,27 +44,31 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Security(http_bearer),
     settings: Settings = Depends(get_settings),
 ) -> UserContext:
     """Reusable FastAPI dependency extracting and validating authenticated user identity.
 
     Fails closed:
-    - Missing Authorization header -> 401 Unauthorized
+    - Missing Authorization header and query token -> 401 Unauthorized
     - Malformed or invalid JWT -> 401 Unauthorized
     - Expired or unverifiable token -> 401 Unauthorized
     - Invalid subject UUID -> 401 Unauthorized
 
     Never logs access tokens or sensitive payloads.
     """
-    if credentials is None or not credentials.credentials:
+    token = credentials.credentials if (credentials and credentials.credentials) else None
+    if not token:
+        # Fallback for Server-Sent Events (SSE) EventSource which cannot set custom HTTP headers
+        token = request.query_params.get("token")
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing bearer authorization credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    token = credentials.credentials
     try:
         user_context = await verify_jwt_token(token=token, settings=settings)
         return user_context

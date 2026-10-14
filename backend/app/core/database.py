@@ -28,6 +28,7 @@ def get_engine() -> AsyncEngine:
                 "max_overflow": settings.DATABASE_MAX_OVERFLOW,
                 "pool_timeout": settings.DATABASE_POOL_TIMEOUT_SECONDS,
                 "pool_recycle": settings.DATABASE_POOL_RECYCLE_SECONDS,
+                "connect_args": {"prepare_threshold": None},
             }
         )
 

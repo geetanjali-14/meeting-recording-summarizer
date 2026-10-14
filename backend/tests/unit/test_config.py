@@ -5,7 +5,7 @@ from app.core.config import Settings
 
 
 def test_default_settings_instantiation() -> None:
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.APP_NAME == "Meeting Intelligence Summarizer"
     assert settings.PORT == 8000
     assert settings.HOST == "0.0.0.0"
@@ -16,11 +16,15 @@ def test_default_settings_instantiation() -> None:
 
 def test_database_url_validation_rejects_non_postgres() -> None:
     with pytest.raises(ValidationError):
-        Settings(DATABASE_URL="sqlite:///./test.db")
+        Settings(_env_file=None, DATABASE_URL="sqlite:///./test.db")
 
 
 def test_database_url_validation_accepts_postgres() -> None:
-    settings = Settings(DATABASE_URL="postgresql+psycopg://user:pass@localhost:5432/dbname")
+    settings = Settings(
+        _env_file=None,
+        APP_ENV="development",
+        DATABASE_URL="postgresql+psycopg://user:pass@localhost:5432/dbname",
+    )
     assert "postgresql+psycopg://" in settings.DATABASE_URL
 
 
