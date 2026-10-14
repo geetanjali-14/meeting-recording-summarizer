@@ -112,7 +112,7 @@ class Settings(BaseSettings):
             return [part.strip() for part in v.split(",") if part.strip()]
         if isinstance(v, list):
             return [str(item).strip() for item in v]
-        return v
+        raise ValueError(f"Invalid format for list setting: {v}")
 
     @field_validator("DATABASE_URL")
     @classmethod
