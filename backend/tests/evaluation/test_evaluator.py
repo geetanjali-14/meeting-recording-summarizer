@@ -204,4 +204,3 @@ def test_evaluator_hand_calculated_cost_calculations() -> None:
         completion_rate_per_token=0.00000060,
     )
     assert llm_cost == pytest.approx(0.0027, rel=1e-4)
-

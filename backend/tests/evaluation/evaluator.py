@@ -7,7 +7,6 @@ Provides deterministic metrics scoring:
   Zero-Hallucination Rate, Evidence Citation Accuracy, Cost and Latency.
 """
 
-
 from __future__ import annotations
 
 import difflib
@@ -242,7 +241,8 @@ class Evaluator:
         reference_segments: list[dict[str, Any]],
         hypothesis_segments: list[dict[str, Any]],
     ) -> float:
-        """Calculates mean absolute drift (in seconds) between reference and hypothesis boundaries.
+        """Calculates mean absolute drift (in seconds) between
+        reference and hypothesis boundaries.
         """
         if not reference_segments or not hypothesis_segments:
             return 0.0

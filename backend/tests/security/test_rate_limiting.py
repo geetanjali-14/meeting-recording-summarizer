@@ -17,7 +17,6 @@ from app.main import create_app
 from app.services.meeting_service import MeetingNotFoundError
 from tests.security.test_tenant_isolation import create_token
 
-
 ORIGINAL_CREATE_LIMIT = create_meeting_limiter.max_requests
 ORIGINAL_CONFIRM_LIMIT = confirm_upload_limiter.max_requests
 ORIGINAL_STATUS_LIMIT = status_polling_limiter.max_requests

@@ -158,6 +158,20 @@ export const api = {
     );
   },
 
+  // Export Analysis
+  async exportMeeting(
+    meetingId: string,
+    format: "markdown" | "json" = "markdown"
+  ): Promise<SuccessEnvelope<import("@/types/api").ExportResponseData>> {
+    return request<import("@/types/api").ExportResponseData>(
+      `/api/v1/meetings/${meetingId}/exports`,
+      {
+        method: "POST",
+        body: JSON.stringify({ format }),
+      }
+    );
+  },
+
   // Direct storage upload with progress
   uploadFileToStorage(
     presignedUrl: string,

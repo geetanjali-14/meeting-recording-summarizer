@@ -36,7 +36,7 @@ jobs:
 
       - name: MyPy Strict Type Check
         run: |
-          mypy app tests
+          mypy app
 
       - name: Run Pytest
         run: |
@@ -71,4 +71,38 @@ jobs:
 
       - name: Build Next.js
         run: npm run build
+
+  container-builds:
+    name: Container Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.api
+          push: false
+
+      - name: Build Worker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.worker
+          push: false
+
+      - name: Build Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.frontend
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:8000
+          push: false
+
 

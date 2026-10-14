@@ -45,4 +45,3 @@ class ChatResponse(BaseModel):
 
     session_id: uuid.UUID
     message: ChatMessageResponse
-

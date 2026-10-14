@@ -240,4 +240,3 @@ User Question: {question}"""
                 )
             )
         return results
-

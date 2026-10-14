@@ -9,4 +9,3 @@ def get_transcription_provider(settings: Settings) -> TranscriptionProvider:
     if settings.TRANSCRIPTION_PROVIDER == "mock":
         return MockWhisperProvider(settings)
     return GroqWhisperProvider(settings)
-

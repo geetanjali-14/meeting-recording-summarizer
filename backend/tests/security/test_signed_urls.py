@@ -6,13 +6,6 @@ from app.services.upload_service import UploadService
 
 
 def test_signed_upload_key_namespacing() -> None:
-    settings = Settings(
-        STORAGE_BUCKET_NAME="secure-recordings",
-        STORAGE_ENDPOINT_URL="https://account.r2.cloudflarestorage.com",
-        STORAGE_ACCESS_KEY_ID="test_key",
-        STORAGE_SECRET_ACCESS_KEY="test_secret",
-        JWT_SIGNING_KEY_OR_JWKS="test-secret-at-least-32-chars-long",
-    )
     user_id = uuid.uuid4()
     recording_id = uuid.uuid4()
     filename = "meeting_audio.m4a"

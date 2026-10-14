@@ -1,6 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.exc import OperationalError
@@ -198,7 +198,9 @@ async def test_provider_429_rate_limit_exponential_backoff_handling() -> None:
         attempt=1,
         max_attempts=3,
     )
-    meeting = Meeting(id=meeting_id, user_id=user_id, title="Rate Limit", status=MeetingStatus.ACTIVE)
+    meeting = Meeting(
+        id=meeting_id, user_id=user_id, title="Rate Limit", status=MeetingStatus.ACTIVE
+    )
     recording = Recording(
         id=recording_id,
         meeting_id=meeting_id,

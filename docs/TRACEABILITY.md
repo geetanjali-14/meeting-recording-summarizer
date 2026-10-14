@@ -31,6 +31,8 @@ This matrix establishes end-to-end traceability across requirements, architectur
 | **REQ-CORE-13** | Cost Observability & Token Metrics | `COST_CONTROL.md`, `OBSERVABILITY.md` | Structured audit logging (`job_id`, `tokens`, `duration`, `cost_estimate`, `pricing_version`) | Phase 5 & 7 | `tests/unit/test_cost_tracking.py` |
 | **REQ-CORE-14** | Resilient Error Handling & State Recovery | ADR-007 (`ARCHITECTURE.md` §8) | Explicit state machine transitions, exponential backoff retries, lease reclamation | Phase 5 | `tests/integration/test_job_retry_and_cancellation.py` |
 | **REQ-CORE-15** | User Interface & Polling Experience | ADR-009 (`PROJECT_PLAN.md`) | Next.js 14 + TypeScript + Tailwind CSS, `/api/v1/meetings/{id}/status` polling | Phase 8 | `tests/frontend/` Playwright E2E suites |
+| **REQ-CORE-16** | Meeting Q&A (Conversational Search) | ADR-005 (`API_SPEC.md` §7.10) | `POST /api/v1/meetings/{id}/chat`, `GET /api/v1/meetings/{id}/chat/messages`, `ChatSession`, `ChatMessage` | Phase 12 | `tests/unit/test_chat_service.py`, `tests/integration/test_chat_api.py` |
+| **REQ-CORE-17** | Export Analysis (Markdown & JSON) | `API_SPEC.md` §7.11 | `POST /api/v1/meetings/{id}/exports`, `ExportRequest`, `ExportResponse` | Extension | `tests/unit/test_export_service.py`, `tests/integration/test_exports_api.py` |
 
 ---
 

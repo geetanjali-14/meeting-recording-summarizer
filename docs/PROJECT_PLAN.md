@@ -151,21 +151,22 @@ The background execution follows an authoritative 11-step pipeline:
 ---
 
 ## 6. Phased Implementation Roadmap
-
+ 
 ```text
-PHASE 0: Requirements + Architecture Correction + Freeze (CURRENT)
-PHASE 1: Repository + Configuration + CI
-PHASE 2: Database + Storage + Domain Contracts
-PHASE 3: Authentication + Authorization
-PHASE 4: Upload + Ingestion
-PHASE 5: Worker + Job Engine (Celery + Redis)
-PHASE 6: Transcription + Diarization (Groq Whisper Turbo & pyannote)
-PHASE 7: Meeting Intelligence + Evidence Verification (GPT-OSS & Targeted Verification)
-PHASE 8: Frontend (Next.js)
-PHASE 9: End-to-End Reliability + Security
-PHASE 10: AI Evaluation + Model Selection
-PHASE 11: Deployment (Docker API & Worker)
-PHASE 12: Meeting Q&A (Conversational Search)
+PHASE 0: Requirements + Architecture Correction + Freeze (COMPLETED)
+PHASE 1: Repository + Configuration + CI (COMPLETED)
+PHASE 2: Database + Storage + Domain Contracts (COMPLETED)
+PHASE 3: Authentication + Authorization (COMPLETED)
+PHASE 4: Upload + Ingestion (COMPLETED)
+PHASE 5: Worker + Job Engine (Celery + Redis) (COMPLETED)
+PHASE 6: Transcription + Diarization (Groq Whisper Turbo & pyannote) (COMPLETED)
+PHASE 7: Meeting Intelligence + Evidence Verification (GPT-OSS & Targeted Verification) (COMPLETED)
+PHASE 8: Frontend (Next.js) (COMPLETED)
+PHASE 9: End-to-End Reliability + Security (COMPLETED)
+PHASE 10: AI Evaluation + Model Selection (COMPLETED - Harness & Datasets Created; Live Benchmarks Require Paid Provider Credits)
+PHASE 11: Deployment (COMPLETED - Docker API, Worker, Frontend & CI Manifests Built; Live Cloud Staging Deferred)
+PHASE 12: Meeting Q&A (Conversational Search) (COMPLETED - Backend & Frontend Verified)
+EXTENSION: Export Analysis (COMPLETED - Markdown & JSON Exports Verified)
 ```
 
 ---

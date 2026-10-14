@@ -1,6 +1,8 @@
 import json
 import logging
+
 import pytest
+
 from app.core.config import Settings
 from app.core.logging import JSONFormatter
 
@@ -113,4 +115,3 @@ def test_json_formatter_comprehensive_log_sanitization() -> None:
     assert "custom_secret_token" not in log_data
     assert "gsk_sensitive_key_value" not in output
     assert "confidential_token" not in output
-

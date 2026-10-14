@@ -29,7 +29,7 @@ from app.workers.job_lease import JobLeaseTracker
 logger = logging.getLogger(__name__)
 
 
-class ProcessingTask(Task):
+class ProcessingTask(Task):  # type: ignore[misc]
     """Custom Celery Task base with retry logic and late ack handling."""
 
     autoretry_for = ()

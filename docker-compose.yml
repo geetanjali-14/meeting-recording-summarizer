@@ -41,6 +41,7 @@ services:
       - APP_NAME=Meeting Intelligence Summarizer
       - APP_ENV=development
       - DEBUG=true
+      - AUTO_MIGRATE=true
       - DATABASE_URL=postgresql+psycopg://postgres:postgrespassword@db:5432/meeting_summarizer
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -82,12 +83,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8000
     container_name: meeting-summarizer-frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       - api
 

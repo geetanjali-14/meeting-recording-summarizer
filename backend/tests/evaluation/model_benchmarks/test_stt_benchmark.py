@@ -120,4 +120,3 @@ def test_stt_benchmark_candidates(dataset_name: str) -> None:
     assert v3_result.cost_per_hour_usd > turbo_result.cost_per_hour_usd
     assert v3_result.latency_seconds > turbo_result.latency_seconds
     assert v3_result.is_live_measurement is False
-

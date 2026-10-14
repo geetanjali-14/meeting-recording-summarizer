@@ -4,6 +4,7 @@ import tempfile
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 
 class AudioProcessingError(Exception):
@@ -19,7 +20,7 @@ class AudioService:
         self.ffmpeg_bin = ffmpeg_bin
         self.ffprobe_bin = ffprobe_bin
 
-    def validate_media_file(self, file_path: str | Path) -> dict:
+    def validate_media_file(self, file_path: str | Path) -> dict[str, Any]:
         """Validates that the file exists, is non-empty, and has valid media streams via ffprobe."""
         path = Path(file_path)
         if not path.exists():

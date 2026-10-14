@@ -238,4 +238,3 @@ async def test_chat_service_enforces_tenant_isolation() -> None:
             user_id=tenant_b,
             question="Tell me the secrets",
         )
-

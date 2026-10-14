@@ -1,18 +1,11 @@
 import json
 import logging
-import uuid
-from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi import APIRouter, HTTPException, status
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_current_user
-from app.core.config import Settings, get_settings
 from app.core.logging import JSONFormatter
-from app.core.security import UserContext
 from app.main import create_app
-from tests.security.test_tenant_isolation import create_token
 
 test_router = APIRouter(prefix="/test-security-checks")
 
@@ -20,7 +13,9 @@ test_router = APIRouter(prefix="/test-security-checks")
 @test_router.get("/trigger-unhandled")
 async def trigger_unhandled() -> dict:
     # Simulates an unhandled exception leaking raw connection info
-    raise RuntimeError("Connection refused: postgresql+psycopg://postgres:secret123@db.prod.internal:5432")
+    raise RuntimeError(
+        "Connection refused: postgresql+psycopg://postgres:secret123@db.prod.internal:5432"
+    )
 
 
 @test_router.get("/trigger-http-error")
@@ -36,7 +31,10 @@ def test_security_headers_present_on_all_responses() -> None:
     assert response.status_code == 200
 
     # Required security headers from SECURITY.md §8
-    assert response.headers.get("Strict-Transport-Security") == "max-age=63072000; includeSubDomains; preload"
+    assert (
+        response.headers.get("Strict-Transport-Security")
+        == "max-age=63072000; includeSubDomains; preload"
+    )
     assert response.headers.get("X-Content-Type-Options") == "nosniff"
     assert response.headers.get("X-Frame-Options") == "DENY"
     assert response.headers.get("Content-Security-Policy") == "default-src 'self'"
@@ -45,7 +43,9 @@ def test_security_headers_present_on_all_responses() -> None:
 
 
 def test_unhandled_exception_sanitized_in_http_response() -> None:
-    """Verifies unhandled 500 exceptions never leak stack traces or credentials in response bodies."""
+    """Verifies unhandled 500 exceptions never leak stack traces
+    or credentials in response bodies.
+    """
     app = create_app()
     app.include_router(test_router)
     client = TestClient(app, raise_server_exceptions=False)
@@ -76,9 +76,9 @@ def test_log_sanitization_masks_sensitive_keys() -> None:
         exc_info=None,
     )
     # Custom attributes attached to record
-    setattr(record, "token", "eyJhbGciOi...")
-    setattr(record, "password", "supersecret")
-    setattr(record, "request_id", "req-12345")
+    record.token = "eyJhbGciOi..."
+    record.password = "supersecret"
+    record.request_id = "req-12345"
 
     output = formatter.format(record)
     log_data = json.loads(output)

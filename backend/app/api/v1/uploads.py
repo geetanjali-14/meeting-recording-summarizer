@@ -46,7 +46,9 @@ async def confirm_upload(
     current_user: Annotated[UserContext, Depends(get_current_user)],
     upload_service: Annotated[UploadService, Depends(get_upload_service)],
 ) -> JSONResponse:
-    """Confirms direct storage upload, transitions statuses, and dispatches background ingestion task."""
+    """Confirms direct storage upload, transitions statuses,
+    and dispatches background ingestion task.
+    """
     try:
         meeting, job = await upload_service.confirm_upload(
             meeting_id=meeting_id,

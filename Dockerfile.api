@@ -16,10 +16,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/pyproject.toml backend/README.md /app/
 RUN pip install .
 
-# Copy application source
+# Copy application source, migrations, and entrypoint
 COPY backend/app /app/app
+COPY backend/alembic.ini /app/alembic.ini
+COPY backend/migrations /app/migrations
+COPY backend/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8000
 
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 

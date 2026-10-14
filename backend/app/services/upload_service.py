@@ -83,7 +83,9 @@ class UploadService:
         user_id: uuid.UUID,
         expires_at: int,
     ) -> str:
-        """Generates a secure HMAC-signed upload token encoding meeting, recording, and user identity."""
+        """Generates a secure HMAC-signed upload token encoding
+        meeting, recording, and user identity.
+        """
         payload = {
             "mid": str(meeting_id),
             "rid": str(recording_id),
@@ -202,7 +204,9 @@ class UploadService:
         upload_token: str,
         user_id: uuid.UUID,
     ) -> tuple[Meeting, ProcessingJob]:
-        """Verifies uploaded object presence, transitions statuses, creates job, and dispatches Celery task."""
+        """Verifies uploaded object presence, transitions statuses,
+        creates job, and dispatches Celery task.
+        """
         # 1. Fetch meeting and recording
         meeting = await self.meeting_repo.get_by_id(
             meeting_id=meeting_id,
@@ -240,7 +244,8 @@ class UploadService:
 
         if not exists:
             raise UploadConflictError(
-                "Media binary not found in storage. Ensure direct upload completed before confirmation."
+                "Media binary not found in storage. Ensure direct upload "
+                "completed before confirmation."
             )
 
         # 4. State transitions: Recording -> UPLOADED, Meeting -> ACTIVE

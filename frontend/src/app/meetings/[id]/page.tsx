@@ -28,6 +28,29 @@ export default function MeetingDetailPage() {
   // Synchronized state
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
   const [speakerMapping, setSpeakerMapping] = useState<Record<string, string>>({});
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+
+  const handleExport = async (format: "markdown" | "json") => {
+    if (!meetingId || isExporting) return;
+    try {
+      setIsExporting(true);
+      const res = await api.exportMeeting(meetingId, format);
+      const blob = new Blob([res.data.content], { type: res.data.content_type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.data.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to export meeting";
+      alert(msg);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const fetchMeetingData = useCallback(async () => {
     if (!meetingId) return;
@@ -157,7 +180,28 @@ export default function MeetingDetailPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {isJobCompleted && (
+              <div className="flex items-center gap-1.5 border border-slate-200 rounded-lg p-0.5 bg-white">
+                <button
+                  onClick={() => handleExport("markdown")}
+                  disabled={isExporting}
+                  className="text-xs font-medium text-slate-700 hover:text-indigo-600 px-2.5 py-1 rounded hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  title="Export meeting intelligence as formatted Markdown"
+                >
+                  📥 Export .md
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  onClick={() => handleExport("json")}
+                  disabled={isExporting}
+                  className="text-xs font-medium text-slate-700 hover:text-indigo-600 px-2.5 py-1 rounded hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  title="Export raw meeting intelligence as JSON"
+                >
+                  📥 Export .json
+                </button>
+              </div>
+            )}
             <button
               onClick={() => fetchMeetingData()}
               className="text-xs font-medium text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"

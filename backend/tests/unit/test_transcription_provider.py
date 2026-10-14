@@ -120,4 +120,3 @@ def test_groq_whisper_provider_missing_credentials_fails_clearly() -> None:
             provider.transcribe(tmp.name)
         assert "Missing or invalid Groq transcription API key" in str(exc_info.value)
         assert exc_info.value.is_retryable is False
-

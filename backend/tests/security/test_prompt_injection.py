@@ -1,8 +1,6 @@
 import uuid
 from unittest.mock import MagicMock
 
-import pytest
-
 from app.agents.meeting_analysis_agent import MeetingAnalysisAgent
 from app.core.config import Settings
 from app.prompts.meeting_analysis_prompt import (
@@ -41,7 +39,8 @@ def test_system_prompt_instructs_passive_data_isolation() -> None:
 
 
 def test_adversarial_prompt_injection_does_not_override_schema() -> None:
-    """Simulates an adversarial transcript containing prompt injection trying to force admin ownership.
+    """Simulates an adversarial transcript containing prompt injection
+    trying to force admin ownership.
 
     The Agent and downstream validator must parse strictly into MeetingAnalysisOutput
     without executing injected commands.
@@ -103,4 +102,3 @@ def test_adversarial_prompt_injection_does_not_override_schema() -> None:
     assert output.action_items[0].owner is None
     assert output.action_items[0].owner != "Admin"
     assert len(output.risks) == 1
-

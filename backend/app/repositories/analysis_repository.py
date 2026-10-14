@@ -115,7 +115,9 @@ class AnalysisRepository:
         await self.session.execute(delete(Decision).where(Decision.analysis_id == analysis_id))
         await self.session.execute(delete(ActionItem).where(ActionItem.analysis_id == analysis_id))
         await self.session.execute(delete(Risk).where(Risk.analysis_id == analysis_id))
-        await self.session.execute(delete(OpenQuestion).where(OpenQuestion.analysis_id == analysis_id))
+        await self.session.execute(
+            delete(OpenQuestion).where(OpenQuestion.analysis_id == analysis_id)
+        )
         await self.session.flush()
 
     async def add_topics(

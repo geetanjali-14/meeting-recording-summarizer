@@ -266,23 +266,46 @@ PHASE 12: Meeting Q&A
 ### PHASE 11 — Deployment
 - **Objective:** Deploy production infrastructure with separate API and Celery Worker container instances, Redis task broker, managed PostgreSQL, Cloudflare R2 private bucket, Next.js frontend, and CI/CD pipelines.
 - **Dependencies:** Phase 9 & Phase 10.
+- **Status:** Architecture & Containerization Implemented; Live Cloud Staging Deferred (Requires external cloud target credentials).
 - **Target Components:**
   - `Dockerfile.api`, `Dockerfile.worker` (with system FFmpeg), `Dockerfile.frontend`.
   - Deployment manifests (Fly.io / Render / Docker Compose).
-  - Production environment configuration and automated CI/CD deployment pipelines.
+  - Production environment configuration and automated CI/CD deployment pipelines (`.github/workflows/ci.yml`).
 - **Acceptance Criteria:**
   - Production API and Celery Worker run as distinct scalable container processes.
   - Redis broker transports tasks while PostgreSQL durably retains all state and results.
-  - HTTPS, secure CORS, and environment secrets verified in live staging/production.
+  - Container build manifests and environment configurations validated locally.
+- **Operational Staging Note:**
+  - Remote domain HTTPS, live production deployment, and remote infrastructure provisioning remain explicitly unverified pending deployment authorization and live credentials.
 
 ---
 
-### PHASE 12 — Meeting Q&A (Planned Future Scope)
+### PHASE 12 — Meeting Q&A (Conversational Search)
 - **Objective:** Enable conversational Q&A over specific meeting transcripts using PostgreSQL full-text search first, with pgvector semantic retrieval only if justified by benchmark requirements.
 - **Dependencies:** Phase 7 & Phase 8.
+- **Status:** Implemented (Backend & Frontend Verified).
 - **Target Components:**
   - `backend/app/models/chat.py` (`ChatSession`, `ChatMessage`).
-  - `backend/app/api/v1/chat.py` (`POST /api/v1/meetings/{id}/chat`).
-  - Grounded answer generation with transcript citation links.
+  - `backend/app/api/v1/chat.py` (`POST /api/v1/meetings/{id}/chat`, `GET /api/v1/meetings/{id}/chat/messages`).
+  - `backend/app/services/chat_service.py` (Transcript retrieval, evidence grounding, citation generation, tenant isolation).
+  - `frontend/src/components/MeetingChat.tsx` & `frontend/src/app/meetings/[id]/page.tsx` (Interactive Q&A component with transcript evidence badges).
+  - `backend/tests/unit/test_chat_service.py`, `backend/tests/integration/test_chat_api.py`.
 - **Acceptance Criteria:**
   - User can ask natural language questions about a meeting and receive grounded answers with transcript timestamp citations.
+  - Insufficient evidence is handled explicitly without hallucinations.
+  - Cross-tenant access is rejected with HTTP 404.
+
+---
+
+### Extension: Export Analysis
+- **Objective:** Export meeting intelligence and transcripts as structured Markdown (`.md`) or JSON (`.json`) with filename sanitization and tenant isolation.
+- **Status:** Implemented (Backend & Frontend Verified).
+- **Target Components:**
+  - `backend/app/schemas/export.py`, `backend/app/services/export_service.py`.
+  - `backend/app/api/v1/exports.py` (`POST /api/v1/meetings/{id}/exports`).
+  - `frontend/src/app/meetings/[id]/page.tsx` (Client-side Markdown/JSON download actions).
+  - `backend/tests/unit/test_export_service.py`, `backend/tests/integration/test_exports_api.py`.
+- **Acceptance Criteria:**
+  - Exports contain available executive summary, decisions, action items (with owner/due date), risks, and transcript segments.
+  - Missing analysis is handled gracefully without hallucinated fields.
+  - Strict tenant isolation enforced (404 on foreign meeting).

@@ -49,7 +49,7 @@ class JSONFormatter(logging.Formatter):
                 log_payload[attr] = val
 
         # Also redact any record __dict__ sensitive items
-        for k, v in record.__dict__.items():
+        for k in record.__dict__:
             if any(secret_term in k.lower() for secret_term in self.REDACTED_KEYS):
                 # Ensure it is never leaked even if added dynamically
                 log_payload.pop(k, None)

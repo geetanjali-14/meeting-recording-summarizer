@@ -44,10 +44,9 @@ class VerificationAgent:
 
         # Ambiguous claim flagged -> Targeted verification LLM call
         prompt = (
-            f"Action Item: \"{action_item.action_text}\"\n"
-            f"Assigned Owner: \"{action_item.owner}\"\n\n"
-            "Cited Segments:\n"
-            + "\n".join(f"- {s.get('text', '')}" for s in cited_segments)
+            f'Action Item: "{action_item.action_text}"\n'
+            f'Assigned Owner: "{action_item.owner}"\n\n'
+            "Cited Segments:\n" + "\n".join(f"- {s.get('text', '')}" for s in cited_segments)
         )
         messages = [
             {"role": "system", "content": SYSTEM_VERIFICATION_INSTRUCTIONS},
@@ -75,10 +74,8 @@ class VerificationAgent:
         if decision.confidence == DecisionConfidence.EXPLICIT or not cited_segments:
             return True
 
-        prompt = (
-            f"Inferred Decision: \"{decision.decision_text}\"\n\n"
-            "Cited Segments:\n"
-            + "\n".join(f"- {s.get('text', '')}" for s in cited_segments)
+        prompt = f'Inferred Decision: "{decision.decision_text}"\n\nCited Segments:\n' + "\n".join(
+            f"- {s.get('text', '')}" for s in cited_segments
         )
         messages = [
             {"role": "system", "content": SYSTEM_VERIFICATION_INSTRUCTIONS},

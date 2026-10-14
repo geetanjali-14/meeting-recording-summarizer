@@ -116,9 +116,7 @@ class AnalysisService:
             # Check action item owners
             for item in output.action_items:
                 item_cited = [
-                    segment_map[sid]
-                    for sid in item.evidence_segment_ids
-                    if sid in segment_map
+                    segment_map[sid] for sid in item.evidence_segment_ids if sid in segment_map
                 ]
                 cited_dicts = [{"text": s.text, "speaker": s.speaker} for s in item_cited]
                 verified = self.verification_agent.verify_action_item_owner(

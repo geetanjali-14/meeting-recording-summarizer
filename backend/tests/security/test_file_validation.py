@@ -1,4 +1,3 @@
-import io
 import uuid
 from pathlib import Path
 
@@ -91,4 +90,3 @@ def test_audio_service_polyglot_and_corrupted_file_validation(tmp_path: Path) ->
     fake_audio.write_bytes(b"MZ\x90\x00This is not valid audio data.")
     with pytest.raises(AudioProcessingError):
         audio_service.validate_media_file(fake_audio)
-

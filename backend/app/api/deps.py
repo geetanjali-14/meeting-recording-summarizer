@@ -16,6 +16,12 @@ from app.repositories.meeting_repository import MeetingRepository
 from app.repositories.recording_repository import RecordingRepository
 
 if TYPE_CHECKING:
+    from app.providers.llm.base import LLMProvider
+    from app.repositories.analysis_repository import AnalysisRepository
+    from app.repositories.chat_repository import ChatRepository
+    from app.repositories.transcript_repository import TranscriptRepository
+    from app.services.chat_service import ChatService
+    from app.services.export_service import ExportService
     from app.services.meeting_service import MeetingService
     from app.services.upload_service import UploadService
 
@@ -171,4 +177,26 @@ def get_chat_service(
         chat_repo=chat_repo,
         llm_provider=llm_provider,
         settings=settings,
+    )
+
+
+def get_analysis_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> "AnalysisRepository":
+    from app.repositories.analysis_repository import AnalysisRepository
+
+    return AnalysisRepository(session)
+
+
+def get_export_service(
+    meeting_repo: MeetingRepository = Depends(get_meeting_repository),
+    analysis_repo: "AnalysisRepository" = Depends(get_analysis_repository),
+    transcript_repo: "TranscriptRepository" = Depends(get_transcript_repository),
+) -> "ExportService":
+    from app.services.export_service import ExportService
+
+    return ExportService(
+        meeting_repo=meeting_repo,
+        analysis_repo=analysis_repo,
+        transcript_repo=transcript_repo,
     )

@@ -198,3 +198,12 @@ export interface ChatResponseData {
   message: ChatMessageItem;
 }
 
+export interface ExportResponseData {
+  meeting_id: string;
+  format: "markdown" | "json";
+  filename: string;
+  content_type: string;
+  content: string;
+  metadata: Record<string, unknown>;
+}
+

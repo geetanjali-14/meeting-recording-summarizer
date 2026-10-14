@@ -277,7 +277,9 @@ class ProcessingService:
                     await lease_tracker.renew_heartbeat(job_id=job_id, worker_id=worker_id)
 
                     # Fetch persisted segments from DB for authoritative IDs and timestamps
-                    db_segments = await self.transcript_repo.get_segments_by_transcript(transcript.id)
+                    db_segments = await self.transcript_repo.get_segments_by_transcript(
+                        transcript.id
+                    )
                     try:
                         await self.analysis_service.execute_analysis(
                             meeting_id=meeting_id,

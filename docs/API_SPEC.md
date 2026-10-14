@@ -417,15 +417,92 @@ All endpoints reside under `/api/v1/`. Any breaking schema or authentication cha
 
 ---
 
-### 7.10 Interactive Chat — Planned Future (Phase 12)
+### 7.10 Interactive Chat (Phase 12)
 `POST /api/v1/meetings/{meeting_id}/chat`  
-- **Status:** Planned Later (Phase 12)
+- **Status:** Implemented  
+- **Auth:** Bearer Token (Tenant Owner)  
+- **Description:** Grounded conversational Q&A over specific meeting transcripts with evidence citations and timestamps. Insufficient evidence is handled explicitly without hallucination.
+
+**Request Payload:**
+```json
+{
+  "question": "What did the team decide regarding PostgreSQL connection pooling?",
+  "session_id": "018e9a4e-1111-7f01-aaaa-111111111111"
+}
+```
+
+**Response Payload (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "session_id": "018e9a4e-1111-7f01-aaaa-111111111111",
+    "message": {
+      "id": "018e9a4e-2222-7f01-bbbb-222222222222",
+      "role": "ASSISTANT",
+      "content": "The team decided to adopt PostgreSQL with a connection pool limit of 10 connections.",
+      "citations": [
+        {
+          "segment_id": "018e9a4c-b2c3-7f01-ef56-789012cdefgh",
+          "start_time": 15.0,
+          "end_time": 25.0,
+          "speaker": "SPEAKER_00",
+          "text": "Let's cap the pool size at 10 connections for safety."
+        }
+      ],
+      "created_at": "2026-10-13T18:00:00Z"
+    }
+  },
+  "meta": {
+    "request_id": "550e8400-e29b-41d4-a716-446655440000",
+    "timestamp": "2026-10-13T18:00:00Z"
+  }
+}
+```
+
+`GET /api/v1/meetings/{meeting_id}/chat/messages`  
+- **Status:** Implemented  
+- **Auth:** Bearer Token (Tenant Owner)  
+- **Description:** Retrieves conversation messages and citation history for the meeting.
 
 ---
 
-### 7.11 Export Analysis — Planned Future
+### 7.11 Export Analysis
 `POST /api/v1/meetings/{meeting_id}/exports`  
-- **Status:** Planned Later
+- **Status:** Implemented  
+- **Auth:** Bearer Token (Tenant Owner)  
+- **Description:** Exports structured meeting intelligence (executive summary, topics, decisions, action items, risks, and transcript) as Markdown or JSON.
+
+**Request Payload:**
+```json
+{
+  "format": "markdown"
+}
+```
+*(Accepts `"markdown"` or `"json"`)*
+
+**Response Payload (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "meeting_id": "018e9a4b-a1b2-7c3d-d4e5-f6a7b8c9d0e1",
+    "format": "markdown",
+    "filename": "Sprint_42_Architecture_Review_analysis.md",
+    "content_type": "text/markdown",
+    "content": "# Sprint 42 Architecture Review\n\n## Executive Summary\n...",
+    "metadata": {
+      "has_analysis": true,
+      "has_transcript": true,
+      "segment_count": 42
+    }
+  },
+  "meta": {
+    "request_id": "550e8400-e29b-41d4-a716-446655440000",
+    "timestamp": "2026-10-13T18:00:00Z"
+  }
+}
+```
 
 ---
 

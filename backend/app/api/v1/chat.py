@@ -62,9 +62,7 @@ async def post_meeting_chat(
             )
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content=create_error_envelope("BAD_REQUEST", err_msg, request).model_dump(
-                mode="json"
-            ),
+            content=create_error_envelope("BAD_REQUEST", err_msg, request).model_dump(mode="json"),
         )
 
 
@@ -102,8 +100,5 @@ async def get_meeting_chat_messages(
     except ValueError as err:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
-            content=create_error_envelope("NOT_FOUND", str(err), request).model_dump(
-                mode="json"
-            ),
+            content=create_error_envelope("NOT_FOUND", str(err), request).model_dump(mode="json"),
         )
-
