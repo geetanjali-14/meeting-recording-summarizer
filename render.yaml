@@ -23,7 +23,7 @@ services:
   # 2. HTTP REST API Web Service: FastAPI Server
   # ----------------------------------------------------------------------------
   - type: web
-    name: meeting-summarizer-api
+    name: meeting-recording-summarizer
     runtime: docker
     dockerfilePath: ./Dockerfile.api
     dockerContext: .
@@ -103,6 +103,10 @@ services:
       # Render passes service envVars as Docker build args during image build.
       # Set to the backend API HTTPS URL (e.g. https://meeting-summarizer-api.onrender.com)
       - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         sync: false
 
 # ==============================================================================

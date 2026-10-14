@@ -41,9 +41,10 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = "placeholder-anon-key"
     JWT_ISSUER: str = "https://example-project.supabase.co/auth/v1"
     JWT_AUDIENCE: str = "authenticated"
-    JWT_ALGORITHMS: list[str] = ["HS256", "RS256"]
+    JWT_ALGORITHMS: list[str] = ["HS256", "RS256", "ES256"]
     JWT_SIGNING_KEY_OR_JWKS: str = "dev-insecure-secret-key-change-in-production"
     JWKS_CACHE_TTL_SECONDS: int = 300
+    UPLOAD_TOKEN_SECRET: str = "dev-insecure-upload-token-secret-change-in-production"
 
     # 4. Object Storage (Cloudflare R2 / S3 Compatible)
     STORAGE_PROVIDER: Literal["r2", "s3", "mock"] = "r2"
@@ -121,6 +122,8 @@ class Settings(BaseSettings):
                 raise ValueError("Valid LLM_API_KEY is required in production.")
             if "dev-insecure-secret-key" in self.JWT_SIGNING_KEY_OR_JWKS:
                 raise ValueError("Insecure default JWT key cannot be used in production.")
+            if "dev-insecure-upload-token" in self.UPLOAD_TOKEN_SECRET:
+                raise ValueError("Insecure default UPLOAD_TOKEN_SECRET cannot be used in production.")
         return self
 
     def __repr__(self) -> str:

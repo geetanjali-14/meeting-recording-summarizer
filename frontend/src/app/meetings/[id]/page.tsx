@@ -3,7 +3,9 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { api, ApiError } from "@/lib/api";
+import { getAccessToken } from "@/lib/auth";
 import {
   MeetingDetail,
   TranscriptSegment,
@@ -17,6 +19,7 @@ import MeetingChat from "@/components/MeetingChat";
 
 export default function MeetingDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const meetingId = (params?.id as string) || "";
 
   const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
@@ -29,6 +32,19 @@ export default function MeetingDetailPage() {
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
   const [speakerMapping, setSpeakerMapping] = useState<Record<string, string>>({});
   const [isExporting, setIsExporting] = useState<boolean>(false);
+
+  // Auth protection guard
+  useEffect(() => {
+    let isMounted = true;
+    getAccessToken().then((token) => {
+      if (isMounted && !token) {
+        router.push("/login");
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
 
   const handleExport = async (format: "markdown" | "json") => {
     if (!meetingId || isExporting) return;
@@ -76,12 +92,16 @@ export default function MeetingDetailPage() {
       }
       setError(null);
     } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.push("/login");
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Failed to load meeting";
       setError(msg);
     } finally {
       setIsLoading(false);
     }
-  }, [meetingId]);
+  }, [meetingId, router]);
 
   useEffect(() => {
     fetchMeetingData();
