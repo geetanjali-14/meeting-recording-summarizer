@@ -92,6 +92,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://meeting-recording-summarizer.vercel.app",
     ]
 
     @field_validator("CORS_ORIGINS", "JWT_ALGORITHMS", mode="before")

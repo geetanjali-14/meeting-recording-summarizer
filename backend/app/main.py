@@ -132,7 +132,7 @@ def create_app() -> FastAPI:
 
     # Root route for browser health check & welcoming
     @app.get("/", tags=["Root"])
-    async def root():
+    async def root() -> dict[str, str]:
         return {
             "status": "online",
             "message": "Meeting Intelligence Summarizer API is running",
