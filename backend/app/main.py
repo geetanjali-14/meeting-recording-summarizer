@@ -130,6 +130,16 @@ def create_app() -> FastAPI:
     # Mount API v1 router
     app.include_router(api_v1_router, prefix="/api/v1")
 
+    # Root route for browser health check & welcoming
+    @app.get("/", tags=["Root"])
+    async def root():
+        return {
+            "status": "online",
+            "message": "Meeting Intelligence Summarizer API is running",
+            "docs": "/docs",
+            "health": "/api/v1/health",
+        }
+
     return app
 
 

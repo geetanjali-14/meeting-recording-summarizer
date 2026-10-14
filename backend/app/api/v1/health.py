@@ -52,12 +52,12 @@ async def health_check() -> HealthResponse:
 async def check_database() -> bool:
     """Probes the primary PostgreSQL database with a bounded timeout."""
     try:
-        async with asyncio.timeout(2.0):
+        async with asyncio.timeout(5.0):
             async with engine.connect() as conn:
                 res = await conn.execute(text("SELECT 1"))
                 return bool(res.scalar() == 1)
     except Exception as exc:
-        logger.warning("Readiness probe database check failed: %s", exc.__class__.__name__)
+        logger.warning("Readiness probe database check failed: %s (%s)", exc.__class__.__name__, exc)
         return False
 
 
