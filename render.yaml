@@ -30,9 +30,8 @@ services:
     plan: starter
     region: oregon
     healthCheckPath: /api/v1/health
-    envVarGroups:
-      - meeting-summarizer-shared
     envVars:
+      - fromGroup: meeting-summarizer-shared
       - key: PORT
         value: "8000"
       - key: HOST
@@ -67,9 +66,8 @@ services:
     dockerContext: .
     plan: starter
     region: oregon
-    envVarGroups:
-      - meeting-summarizer-shared
     envVars:
+      - fromGroup: meeting-summarizer-shared
       # Link broker from Key Value instance
       - key: REDIS_URL
         fromService:
