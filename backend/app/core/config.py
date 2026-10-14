@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -93,6 +93,25 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
+
+    @field_validator("CORS_ORIGINS", "JWT_ALGORITHMS", mode="before")
+    @classmethod
+    def parse_string_to_list(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                import json
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed]
+                except Exception:
+                    pass
+            # Comma-separated fallback
+            return [part.strip() for part in v.split(",") if part.strip()]
+        if isinstance(v, list):
+            return [str(item).strip() for item in v]
+        return v
 
     @field_validator("DATABASE_URL")
     @classmethod
