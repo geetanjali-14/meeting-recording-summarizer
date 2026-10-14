@@ -1,7 +1,8 @@
 import datetime
 import uuid
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.core.config import Settings
 from app.models.meeting import Meeting, MeetingStatus
@@ -9,7 +10,7 @@ from app.models.recording import Recording, RecordingStatus
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.meeting import MeetingCreateRequest
-from app.services.upload_service import UploadService, UploadValidationError
+from app.services.upload_service import UploadService
 
 
 @pytest.fixture
@@ -52,7 +53,9 @@ async def test_first_time_user_provisioning_on_upload(mock_settings: Settings) -
     mock_recording_repo.create = AsyncMock(return_value=mock_recording)
 
     mock_storage = MagicMock()
-    mock_storage.generate_presigned_upload_url = MagicMock(return_value="https://storage.example.com/put")
+    mock_storage.generate_presigned_upload_url = MagicMock(
+        return_value="https://storage.example.com/put"
+    )
 
     # Mock user repository
     mock_user_repo = MagicMock(spec=UserRepository)
@@ -77,11 +80,12 @@ async def test_first_time_user_provisioning_on_upload(mock_settings: Settings) -
         file_size_bytes=1000,
     )
 
-    meeting, recording, upload_url, upload_token, expires_in = await upload_service.initiate_meeting_upload(
+    res = await upload_service.initiate_meeting_upload(
         user_id=user_id,
         request=request,
         user_email=user_email,
     )
+    meeting, recording, upload_url, upload_token, expires_in = res
 
     # Verifications
     mock_user_repo.get_by_id.assert_awaited_once_with(user_id)
@@ -92,7 +96,7 @@ async def test_first_time_user_provisioning_on_upload(mock_settings: Settings) -
 
 @pytest.mark.asyncio
 async def test_existing_user_no_redundant_provisioning(mock_settings: Settings) -> None:
-    """When an existing user creates a meeting, get_by_id finds the user and upsert_user is skipped."""
+    """When an existing user creates a meeting, redundant user upsert is skipped."""
     user_id = uuid.uuid4()
     existing_user = User(id=user_id, email="existing@example.com")
 
@@ -119,7 +123,9 @@ async def test_existing_user_no_redundant_provisioning(mock_settings: Settings) 
     mock_recording_repo.create = AsyncMock(return_value=mock_recording)
 
     mock_storage = MagicMock()
-    mock_storage.generate_presigned_upload_url = MagicMock(return_value="https://storage.example.com/put")
+    mock_storage.generate_presigned_upload_url = MagicMock(
+        return_value="https://storage.example.com/put"
+    )
 
     mock_user_repo = MagicMock(spec=UserRepository)
     mock_user_repo.get_by_id = AsyncMock(return_value=existing_user)

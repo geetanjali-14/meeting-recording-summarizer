@@ -101,6 +101,7 @@ class Settings(BaseSettings):
             v = v.strip()
             if v.startswith("[") and v.endswith("]"):
                 import json
+
                 try:
                     parsed = json.loads(v)
                     if isinstance(parsed, list):
@@ -142,7 +143,9 @@ class Settings(BaseSettings):
             if "dev-insecure-secret-key" in self.JWT_SIGNING_KEY_OR_JWKS:
                 raise ValueError("Insecure default JWT key cannot be used in production.")
             if "dev-insecure-upload-token" in self.UPLOAD_TOKEN_SECRET:
-                raise ValueError("Insecure default UPLOAD_TOKEN_SECRET cannot be used in production.")
+                raise ValueError(
+                    "Insecure default UPLOAD_TOKEN_SECRET cannot be used in production."
+                )
         return self
 
     def __repr__(self) -> str:

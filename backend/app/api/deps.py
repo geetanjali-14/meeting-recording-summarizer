@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from app.repositories.analysis_repository import AnalysisRepository
     from app.repositories.chat_repository import ChatRepository
     from app.repositories.transcript_repository import TranscriptRepository
+    from app.repositories.user_repository import UserRepository
     from app.services.chat_service import ChatService
     from app.services.export_service import ExportService
     from app.services.meeting_service import MeetingService

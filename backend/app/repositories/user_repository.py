@@ -1,5 +1,4 @@
 import uuid
-from typing import Any
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -34,7 +33,7 @@ class UserRepository:
         display_name: str | None = None,
     ) -> User:
         """Idempotently provisions or updates a user upon verified authentication.
-        
+
         Uses PostgreSQL ON CONFLICT (id) DO UPDATE to guarantee safety under concurrent requests.
         """
         now = datetime.now(UTC)
