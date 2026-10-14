@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Any, Literal
+from typing import Any, Literal, Union
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = "placeholder-anon-key"
     JWT_ISSUER: str = "https://example-project.supabase.co/auth/v1"
     JWT_AUDIENCE: str = "authenticated"
-    JWT_ALGORITHMS: list[str] = ["HS256", "RS256", "ES256"]
+    JWT_ALGORITHMS: Union[list[str], str] = ["HS256", "RS256", "ES256"]
     JWT_SIGNING_KEY_OR_JWKS: str = "dev-insecure-secret-key-change-in-production"
     JWKS_CACHE_TTL_SECONDS: int = 300
     UPLOAD_TOKEN_SECRET: str = "dev-insecure-upload-token-secret-change-in-production"
@@ -89,13 +89,13 @@ class Settings(BaseSettings):
     WORKER_MAX_ATTEMPTS: int = 3
 
     # 8. Frontend / CORS
-    CORS_ORIGINS: list[str] = [
+    CORS_ORIGINS: Union[list[str], str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://meeting-recording-summarizer.vercel.app",
     ]
 
-    @field_validator("CORS_ORIGINS", "JWT_ALGORITHMS", mode="before")
+    @field_validator("CORS_ORIGINS", "JWT_ALGORITHMS", mode="after")
     @classmethod
     def parse_string_to_list(cls, v: Any) -> list[str]:
         if isinstance(v, str):
