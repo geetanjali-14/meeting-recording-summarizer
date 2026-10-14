@@ -1,0 +1,214 @@
+# ==============================================================================
+# Render Blueprint Specification (render.yaml)
+# Project: Meeting Intelligence Summarizer
+# Architecture:
+#   - Frontend Web Service (Next.js 14 Docker container)
+#   - Backend Web Service (FastAPI Docker container)
+#   - Background Processing Worker (Celery + FFmpeg Docker container)
+#   - Task Broker / Key Value (Valkey / Redis 7 compatible)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Message Broker: Redis-compatible Key Value Service (Valkey)
+  # ----------------------------------------------------------------------------
+  - type: keyvalue
+    name: meeting-summarizer-redis
+    plan: starter
+    region: oregon
+    ipAllowList: [] # Strict zero-trust: restricted to Render internal private network only
+    maxmemoryPolicy: noeviction # Recommended for job task queues to prevent task dropping
+
+  # ----------------------------------------------------------------------------
+  # 2. HTTP REST API Web Service: FastAPI Server
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: meeting-summarizer-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    dockerContext: .
+    plan: starter
+    region: oregon
+    healthCheckPath: /api/v1/health
+    envVarGroups:
+      - meeting-summarizer-shared
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: AUTO_MIGRATE
+        value: "false" # Set to "true" only when executing Alembic migrations in a controlled deploy
+      # Link broker from Key Value instance
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: meeting-summarizer-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: meeting-summarizer-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        value: "rpc://"
+      # Allowed frontend origins for CORS
+      # Set to frontend service production HTTPS URL (e.g., https://meeting-summarizer-frontend.onrender.com)
+      - key: CORS_ORIGINS
+        sync: false
+
+  # ----------------------------------------------------------------------------
+  # 3. Background Processing Worker: Celery Task Worker
+  # ----------------------------------------------------------------------------
+  - type: worker
+    name: meeting-summarizer-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.worker
+    dockerContext: .
+    plan: starter
+    region: oregon
+    envVarGroups:
+      - meeting-summarizer-shared
+    envVars:
+      # Link broker from Key Value instance
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: meeting-summarizer-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: meeting-summarizer-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        value: "rpc://"
+
+  # ----------------------------------------------------------------------------
+  # 4. Frontend Web Service: Next.js 14 Client & Server
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: meeting-summarizer-frontend
+    runtime: docker
+    dockerfilePath: ./Dockerfile.frontend
+    dockerContext: .
+    plan: starter
+    region: oregon
+    envVars:
+      - key: NODE_ENV
+        value: "production"
+      - key: PORT
+        value: "3000"
+      # Build-time and runtime API base URL for client & server components
+      # Render passes service envVars as Docker build args during image build.
+      # Set to the backend API HTTPS URL (e.g. https://meeting-summarizer-api.onrender.com)
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+
+# ==============================================================================
+# Shared Environment Variables & Secrets
+# ==============================================================================
+envVarGroups:
+  - name: meeting-summarizer-shared
+    envVars:
+      - key: APP_NAME
+        value: "Meeting Intelligence Summarizer"
+      - key: APP_ENV
+        value: "production"
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: "INFO"
+
+      # Database Configuration (Supabase PostgreSQL)
+      - key: DATABASE_URL
+        sync: false # e.g. postgresql+psycopg://postgres.<ref>:[PWD]@aws-0-[region].pooler.supabase.com:6543/postgres?sslmode=require
+      - key: DATABASE_POOL_SIZE
+        value: "10"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "20"
+      - key: DATABASE_POOL_TIMEOUT_SECONDS
+        value: "30"
+      - key: DATABASE_POOL_RECYCLE_SECONDS
+        value: "1800"
+
+      # Supabase Authentication & JWT Verification
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: JWT_ISSUER
+        sync: false
+      - key: JWT_AUDIENCE
+        value: "authenticated"
+      - key: JWT_ALGORITHMS
+        value: '["RS256", "HS256"]'
+      - key: JWT_SIGNING_KEY_OR_JWKS
+        sync: false # e.g. https://<ref>.supabase.co/auth/v1/.well-known/jwks.json or shared secret
+
+      # Object Storage: Cloudflare R2
+      - key: STORAGE_PROVIDER
+        value: "r2"
+      - key: STORAGE_ACCESS_KEY_ID
+        sync: false
+      - key: STORAGE_SECRET_ACCESS_KEY
+        sync: false
+      - key: STORAGE_BUCKET_NAME
+        sync: false
+      - key: STORAGE_ENDPOINT_URL
+        sync: false # e.g. https://<account_id>.r2.cloudflarestorage.com
+      - key: STORAGE_REGION
+        value: "auto"
+      - key: STORAGE_PRESIGNED_UPLOAD_EXPIRY_SECONDS
+        value: "900"
+      - key: STORAGE_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS
+        value: "3600"
+
+      # LLM Provider: Groq
+      - key: LLM_PROVIDER
+        value: "groq"
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: "gpt-oss-120b"
+      - key: LLM_LOW_COST_MODEL
+        value: "gpt-oss-20b"
+      - key: LLM_TEMPERATURE
+        value: "0.0"
+      - key: LLM_MAX_TOKENS
+        value: "4096"
+      - key: LLM_TIMEOUT_SECONDS
+        value: "60"
+      - key: LLM_MAX_RETRIES
+        value: "2"
+
+      # Transcription & Diarization: Groq Whisper Turbo & Hugging Face Pyannote
+      - key: TRANSCRIPTION_PROVIDER
+        value: "groq_whisper_turbo"
+      - key: TRANSCRIPTION_API_KEY
+        sync: false
+      - key: TRANSCRIPTION_MODEL
+        value: "whisper-large-v3-turbo"
+      - key: TRANSCRIPTION_TIMEOUT_SECONDS
+        value: "300"
+      - key: DIARIZATION_PROVIDER
+        value: "pyannote_community_1"
+      - key: HF_TOKEN
+        sync: false
+
+      # Celery Worker Reliability Settings
+      - key: CELERY_TASK_ACKS_LATE
+        value: "true"
+      - key: CELERY_TASK_REJECT_ON_WORKER_LOST
+        value: "true"
+      - key: CELERY_WORKER_PREFETCH_MULTIPLIER
+        value: "1"
+      - key: CELERY_WORKER_CONCURRENCY
+        value: "2"
+      - key: WORKER_LEASE_DURATION_SECONDS
+        value: "120"
+      - key: WORKER_HEARTBEAT_INTERVAL_SECONDS
+        value: "30"
+      - key: WORKER_MAX_ATTEMPTS
+        value: "3"
+
