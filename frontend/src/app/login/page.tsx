@@ -18,7 +18,7 @@ export default function LoginPage() {
 
   const router = useRouter();
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated or on auth change (magic link click)
   useEffect(() => {
     let isMounted = true;
     getAccessToken().then((token) => {
@@ -26,8 +26,18 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (isMounted && session) {
+          router.push("/dashboard");
+        }
+      }
+    );
+
     return () => {
       isMounted = false;
+      subscription.unsubscribe();
     };
   }, [router]);
 
@@ -54,10 +64,16 @@ export default function LoginPage() {
       setError(null);
       setInfoMessage(null);
 
+      const redirectUrl =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/login`
+          : undefined;
+
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
           shouldCreateUser: true, // Auto-register new users
+          emailRedirectTo: redirectUrl,
         },
       });
 
