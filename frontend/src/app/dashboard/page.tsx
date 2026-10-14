@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
-import { getStoredToken } from "@/lib/auth";
+import { getAccessToken } from "@/lib/auth";
 import { MeetingListItem } from "@/types/api";
 
 export default function DashboardPage() {
@@ -14,19 +14,25 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = getStoredToken();
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    let isMounted = true;
 
-    const fetchMeetings = async () => {
+    const init = async () => {
+      const token = await getAccessToken();
+      if (!isMounted) return;
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
         const res = await api.listMeetings();
-        setMeetings(res.data || []);
+        if (isMounted) {
+          setMeetings(res.data || []);
+        }
       } catch (err) {
+        if (!isMounted) return;
         if (err instanceof ApiError && err.status === 401) {
           router.push("/login");
           return;
@@ -37,11 +43,17 @@ export default function DashboardPage() {
             : "Failed to load meetings. Make sure the backend server is running."
         );
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchMeetings();
+    init();
+
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
   return (

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from app.repositories.analysis_repository import AnalysisRepository
     from app.repositories.chat_repository import ChatRepository
     from app.repositories.transcript_repository import TranscriptRepository
+    from app.repositories.user_repository import UserRepository
     from app.services.chat_service import ChatService
     from app.services.export_service import ExportService
     from app.services.meeting_service import MeetingService
@@ -144,11 +145,20 @@ def get_llm_provider(
     return get_llm_provider_factory(settings)
 
 
+def get_user_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> "UserRepository":
+    from app.repositories.user_repository import UserRepository
+
+    return UserRepository(session)
+
+
 def get_upload_service(
     meeting_repo: MeetingRepository = Depends(get_meeting_repository),
     recording_repo: RecordingRepository = Depends(get_recording_repository),
     job_repo: JobRepository = Depends(get_job_repository),
     storage_provider: StorageProvider = Depends(get_storage_provider),
+    user_repo: "UserRepository" = Depends(get_user_repository),
     settings: Settings = Depends(get_settings),
 ) -> "UploadService":
     from app.services.upload_service import UploadService
@@ -158,6 +168,7 @@ def get_upload_service(
         recording_repo=recording_repo,
         job_repo=job_repo,
         storage_provider=storage_provider,
+        user_repo=user_repo,
         settings=settings,
     )
 

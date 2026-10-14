@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { clearStoredToken, getStoredToken } from "@/lib/auth";
+import { getAccessToken, signOut } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
 export function Navbar() {
   const [token, setToken] = useState<string | null>(null);
@@ -11,11 +12,23 @@ export function Navbar() {
   const pathname = usePathname();
 
   useEffect(() => {
-    setToken(getStoredToken());
+    // Initial token check
+    getAccessToken().then(setToken);
+
+    // Subscribe to auth state changes for real-time reactivity
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setToken(session?.access_token || null);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [pathname]);
 
-  const handleLogout = () => {
-    clearStoredToken();
+  const handleLogout = async () => {
+    await signOut();
     setToken(null);
     router.push("/login");
   };

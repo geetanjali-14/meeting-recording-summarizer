@@ -15,6 +15,7 @@ from app.providers.storage.base import StorageProvider
 from app.repositories.job_repository import JobRepository
 from app.repositories.meeting_repository import MeetingRepository
 from app.repositories.recording_repository import RecordingRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.meeting import (
     ALLOWED_CONTENT_TYPES,
     MAX_FILE_SIZE_BYTES,
@@ -69,12 +70,14 @@ class UploadService:
         job_repo: JobRepository,
         storage_provider: StorageProvider,
         settings: Settings,
+        user_repo: UserRepository | None = None,
     ) -> None:
         self.meeting_repo = meeting_repo
         self.recording_repo = recording_repo
         self.job_repo = job_repo
         self.storage_provider = storage_provider
         self.settings = settings
+        self.user_repo = user_repo
 
     def generate_upload_token(
         self,
@@ -94,7 +97,7 @@ class UploadService:
         }
         raw_json = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         payload_b64 = base64.urlsafe_b64encode(raw_json).decode("utf-8")
-        secret = self.settings.JWT_SIGNING_KEY_OR_JWKS.encode("utf-8")
+        secret = self.settings.UPLOAD_TOKEN_SECRET.encode("utf-8")
         signature = hmac.new(secret, payload_b64.encode("utf-8"), hashlib.sha256).hexdigest()
         return f"up_tok_{payload_b64}.{signature}"
 
@@ -113,7 +116,7 @@ class UploadService:
         if len(parts) != 2:
             return False
         payload_b64, signature = parts
-        secret = self.settings.JWT_SIGNING_KEY_OR_JWKS.encode("utf-8")
+        secret = self.settings.UPLOAD_TOKEN_SECRET.encode("utf-8")
         expected_signature = hmac.new(
             secret, payload_b64.encode("utf-8"), hashlib.sha256
         ).hexdigest()
@@ -138,6 +141,7 @@ class UploadService:
         self,
         user_id: uuid.UUID,
         request: MeetingCreateRequest,
+        user_email: str | None = None,
     ) -> tuple[Meeting, Recording, str, str, int]:
         """Creates meeting, recording entity, and generates presigned PUT upload URL."""
         # 1. Validation
@@ -151,7 +155,18 @@ class UploadService:
                 f"File size must be between 1 and {MAX_FILE_SIZE_BYTES} bytes."
             )
 
-        # 2. Persist meeting aggregate
+        # 2. Ensure local user record exists for foreign-key constraint integrity
+        if self.user_repo is not None:
+            user = await self.user_repo.get_by_id(user_id)
+            if user is None:
+                # Provision local user row idempotently
+                email_to_use = user_email or f"user_{user_id}@placeholder.app"
+                await self.user_repo.upsert_user(
+                    user_id=user_id,
+                    email=email_to_use,
+                )
+
+        # 3. Persist meeting aggregate
         meeting = await self.meeting_repo.create(
             user_id=user_id,
             title=request.title,

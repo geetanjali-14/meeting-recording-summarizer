@@ -1,6 +1,25 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { getAccessToken } from "@/lib/auth";
 import { UploadDropzone } from "@/components/UploadDropzone";
 
 export default function NewMeetingPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    let isMounted = true;
+    getAccessToken().then((token) => {
+      if (isMounted && !token) {
+        router.push("/login");
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="mb-8">

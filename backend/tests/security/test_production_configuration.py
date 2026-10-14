@@ -60,7 +60,21 @@ def test_production_settings_validation_blocks_insecure_defaults() -> None:
             JWT_SIGNING_KEY_OR_JWKS="dev-insecure-secret-key-change-in-production",
         )
 
-    # 5. Placeholder storage secret blocked in production
+    # 5. Insecure UPLOAD_TOKEN_SECRET blocked in production
+    with pytest.raises(ValueError, match="Insecure default UPLOAD_TOKEN_SECRET cannot be used"):
+        Settings(
+            APP_ENV="production",
+            DEBUG=False,
+            DATABASE_URL="postgresql+psycopg://user:pass@remote-host:5432/dbname",
+            REDIS_URL="redis://remote-host:6379/0",
+            STORAGE_ACCESS_KEY_ID="valid_r2_key",
+            STORAGE_SECRET_ACCESS_KEY="valid_r2_secret",
+            LLM_API_KEY="valid_llm_key",
+            JWT_SIGNING_KEY_OR_JWKS="secure_production_jwt_signing_key_secret_value",
+            UPLOAD_TOKEN_SECRET="dev-insecure-upload-token-secret-change-in-production",
+        )
+
+    # 6. Placeholder storage secret blocked in production
     with pytest.raises(ValueError, match="Valid STORAGE_SECRET_ACCESS_KEY is required"):
         Settings(
             APP_ENV="production",
@@ -71,9 +85,10 @@ def test_production_settings_validation_blocks_insecure_defaults() -> None:
             STORAGE_SECRET_ACCESS_KEY="placeholder-secret",
             LLM_API_KEY="valid_llm_key",
             JWT_SIGNING_KEY_OR_JWKS="secure_production_jwt_signing_key_secret_value",
+            UPLOAD_TOKEN_SECRET="secure_production_upload_token_secret_value",
         )
 
-    # 6. Valid production configuration passes smoothly
+    # 7. Valid production configuration passes smoothly
     valid_settings = Settings(
         APP_ENV="production",
         DEBUG=False,
@@ -83,6 +98,7 @@ def test_production_settings_validation_blocks_insecure_defaults() -> None:
         STORAGE_SECRET_ACCESS_KEY="actual_prod_r2_secret_key",
         LLM_API_KEY="gsk_actual_live_groq_key",
         JWT_SIGNING_KEY_OR_JWKS="https://project.supabase.co/auth/v1/.well-known/jwks.json",
+        UPLOAD_TOKEN_SECRET="secure_production_upload_token_secret_value",
     )
     assert valid_settings.APP_ENV == "production"
     assert valid_settings.DEBUG is False

@@ -13,16 +13,19 @@ from app.api.deps import (
     get_meeting_repository,
     get_recording_repository,
     get_storage_provider,
+    get_user_repository,
 )
 from app.core.config import Settings, get_settings
 from app.main import create_app
 from app.models.meeting import Meeting, MeetingStatus
 from app.models.processing_job import JobStage, JobStatus, ProcessingJob
 from app.models.recording import Recording, RecordingStatus
+from app.models.user import User
 from app.providers.storage.base import StorageProvider
 from app.repositories.job_repository import JobRepository
 from app.repositories.meeting_repository import MeetingRepository
 from app.repositories.recording_repository import RecordingRepository
+from app.repositories.user_repository import UserRepository
 
 
 class MockStorageProvider(StorageProvider):
@@ -235,6 +238,34 @@ class InMemoryJobRepository(JobRepository):
         return job
 
 
+class InMemoryUserRepository(UserRepository):
+    def __init__(self) -> None:
+        self.storage: dict[uuid.UUID, User] = {}
+
+    async def get_by_id(self, user_id: uuid.UUID) -> User | None:
+        return self.storage.get(user_id)
+
+    async def get_by_email(self, email: str) -> User | None:
+        for u in self.storage.values():
+            if u.email == email:
+                return u
+        return None
+
+    async def upsert_user(
+        self,
+        user_id: uuid.UUID,
+        email: str,
+        display_name: str | None = None,
+    ) -> User:
+        user = User(
+            id=user_id,
+            email=email,
+            display_name=display_name,
+        )
+        self.storage[user_id] = user
+        return user
+
+
 TEST_JWT_SECRET = "test-secret-key-32-chars-minimum-length"
 
 
@@ -293,11 +324,17 @@ def mock_job_repo(mock_meeting_repo: InMemoryMeetingRepository) -> InMemoryJobRe
 
 
 @pytest.fixture
+def mock_user_repo() -> InMemoryUserRepository:
+    return InMemoryUserRepository()
+
+
+@pytest.fixture
 def test_app(
     mock_storage: MockStorageProvider,
     mock_meeting_repo: InMemoryMeetingRepository,
     mock_recording_repo: InMemoryRecordingRepository,
     mock_job_repo: InMemoryJobRepository,
+    mock_user_repo: InMemoryUserRepository,
 ) -> Any:
     app = create_app()
     test_settings = Settings(
@@ -305,6 +342,7 @@ def test_app(
         JWT_AUDIENCE="authenticated",
         JWT_ALGORITHMS=["HS256"],
         JWT_SIGNING_KEY_OR_JWKS=TEST_JWT_SECRET,
+        UPLOAD_TOKEN_SECRET=TEST_JWT_SECRET,
         STORAGE_PRESIGNED_UPLOAD_EXPIRY_SECONDS=900,
     )
     app.dependency_overrides[get_settings] = lambda: test_settings
@@ -312,6 +350,7 @@ def test_app(
     app.dependency_overrides[get_meeting_repository] = lambda: mock_meeting_repo
     app.dependency_overrides[get_recording_repository] = lambda: mock_recording_repo
     app.dependency_overrides[get_job_repository] = lambda: mock_job_repo
+    app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
     return app
 
 

@@ -65,6 +65,7 @@ async def create_meeting(
         ) = await upload_service.initiate_meeting_upload(
             user_id=current_user.user_id,
             request=payload,
+            user_email=current_user.email,
         )
     except UploadValidationError as err:
         return JSONResponse(

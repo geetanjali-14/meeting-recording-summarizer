@@ -8,7 +8,7 @@ import {
   SuccessEnvelope,
   TranscriptResponse,
 } from "@/types/api";
-import { getStoredToken } from "./auth";
+import { getAccessToken } from "./auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -30,7 +30,7 @@ async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<SuccessEnvelope<T>> {
-  const token = getStoredToken();
+  const token = await getAccessToken();
   const headers = new Headers(options.headers || {});
 
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
