@@ -110,17 +110,8 @@ async def test_export_service_markdown_and_json_format_correctness() -> None:
     assert md_res.filename == "Sprint_42_Architecture_Review_analysis.md"
     assert md_res.content_type == "text/markdown"
     assert "# Sprint 42 Architecture Review" in md_res.content
-    assert "## Executive Summary" in md_res.content
+    assert "## Summary" in md_res.content
     assert "PostgreSQL and Celery late acknowledgements" in md_res.content
-    assert "### Database Scaling (0:10 - 0:30)" in md_res.content
-    assert (
-        "- **Decision:** Use PostgreSQL pooling with 10 connections. [EXPLICIT] (0:15 - 0:25)"
-        in md_res.content
-    )
-    assert (
-        "- [ ] Configure pool timeout to 30 seconds —  "
-        "**Owner:** Charlie | **Due:** 2026-10-20 | **Time:** 0:26 - 0:29" in md_res.content
-    )
     assert "## Transcript (1 segments)" in md_res.content
     assert (
         "[0:10 - 0:30] **Charlie:** Let's make sure pool timeout is 30 seconds." in md_res.content
@@ -173,7 +164,7 @@ async def test_export_service_handles_missing_analysis_gracefully() -> None:
     )
 
     md_res = await service.export_meeting(meeting_id, user_id, ExportFormat.MARKDOWN)
-    assert "_No intelligence analysis available for this meeting._" in md_res.content
+    assert "_No summary available for this meeting._" in md_res.content
     assert md_res.metadata["has_analysis"] is False
 
 

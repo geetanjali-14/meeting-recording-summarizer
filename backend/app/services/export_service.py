@@ -124,6 +124,7 @@ class ExportService:
                         "sequence_index": t.sequence_index,
                         "title": t.title,
                         "summary": t.summary,
+                        "discussion_progression": t.discussion_progression,
                         "start_time": t.start_time,
                         "end_time": t.end_time,
                     }
@@ -180,6 +181,9 @@ class ExportService:
                     }
                     for q in sorted(analysis.open_questions, key=lambda x: x.sequence_index)
                 ],
+                "speaker_contributions": analysis.speaker_contributions or {},
+                "context_and_details": analysis.context_and_details or [],
+                "next_steps": analysis.next_steps or [],
             }
 
         return json.dumps(data, indent=2)
@@ -202,71 +206,21 @@ class ExportService:
         if analysis is None:
             lines.extend(
                 [
-                    "## Executive Summary",
+                    "## Summary",
                     "",
-                    "_No intelligence analysis available for this meeting._",
+                    "_No summary available for this meeting._",
                     "",
                 ]
             )
         else:
             lines.extend(
                 [
-                    "## Executive Summary",
+                    "## Summary",
                     "",
-                    analysis.executive_summary or "_No executive summary generated._",
+                    analysis.executive_summary or "_No summary generated._",
                     "",
                 ]
             )
-
-            if analysis.topics:
-                lines.extend(["## Discussion Topics", ""])
-                for t in sorted(analysis.topics, key=lambda x: x.sequence_index):
-                    ts = ""
-                    if t.start_time is not None:
-                        ts = f" ({format_seconds(t.start_time)} - {format_seconds(t.end_time)})"
-                    lines.append(f"### {t.title}{ts}")
-                    if t.summary:
-                        lines.append(f"{t.summary}\n")
-
-            if analysis.decisions:
-                lines.extend(["## Decisions", ""])
-                for d in sorted(analysis.decisions, key=lambda x: x.sequence_index):
-                    conf = f" [{d.confidence.value}]" if d.confidence else ""
-                    ts = ""
-                    if d.start_time is not None:
-                        ts = f" ({format_seconds(d.start_time)} - {format_seconds(d.end_time)})"
-                    lines.append(f"- **Decision:** {d.decision_text}{conf}{ts}")
-                lines.append("")
-
-            if analysis.action_items:
-                lines.extend(["## Action Items", ""])
-                for a in sorted(analysis.action_items, key=lambda x: x.sequence_index):
-                    owner = f" **Owner:** {a.owner}" if a.owner else " **Owner:** _Unassigned_"
-                    due = f" | **Due:** {a.due_date}" if a.due_date else " | **Due:** _None_"
-                    ts = ""
-                    if a.start_time is not None:
-                        t_str = f"{format_seconds(a.start_time)} - {format_seconds(a.end_time)}"
-                        ts = f" | **Time:** {t_str}"
-                    lines.append(f"- [ ] {a.action_text} — {owner}{due}{ts}")
-                lines.append("")
-
-            if analysis.risks:
-                lines.extend(["## Risks & Blockers", ""])
-                for r in sorted(analysis.risks, key=lambda x: x.sequence_index):
-                    ts = ""
-                    if r.start_time is not None:
-                        ts = f" ({format_seconds(r.start_time)} - {format_seconds(r.end_time)})"
-                    lines.append(f"- ⚠️ {r.risk_text}{ts}")
-                lines.append("")
-
-            if analysis.open_questions:
-                lines.extend(["## Open Questions", ""])
-                for q in sorted(analysis.open_questions, key=lambda x: x.sequence_index):
-                    ts = ""
-                    if q.start_time is not None:
-                        ts = f" ({format_seconds(q.start_time)} - {format_seconds(q.end_time)})"
-                    lines.append(f"- ❓ {q.question_text}{ts}")
-                lines.append("")
 
         if segments:
             lines.extend(

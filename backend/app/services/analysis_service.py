@@ -100,37 +100,36 @@ class AnalysisService:
             for s in segments
         ]
 
-        # 1. Run LLM extraction
+        # 1. Run LLM extraction with context-aware chunking and synthesis
         try:
             output, llm_response = self.analysis_agent.analyze_transcript(segments_payload)
+            chunk_findings = getattr(self.analysis_agent, "last_chunk_findings", [])
         except MeetingAnalysisAgentError as exc:
             raise exc
 
-        # 2. Filter citations against database segment IDs (IDOR & hallucination guard)
-        valid_uuids = set(segment_map.keys())
-
-        # 3. Targeted verification on flagged claims
+        # 2. Evidence verification and completeness audit with targeted repair
         verification_performed = False
         verification_model: str | None = None
 
         if self.verification_agent:
             if on_stage_change:
                 await on_stage_change()
-            # Check action item owners
-            for item in output.action_items:
-                item_cited = [
-                    segment_map[sid] for sid in item.evidence_segment_ids if sid in segment_map
-                ]
-                cited_dicts = [{"text": s.text, "speaker": s.speaker} for s in item_cited]
-                verified = self.verification_agent.verify_action_item_owner(
-                    action_item=item,
-                    cited_segments=cited_dicts,
+            report = self.verification_agent.verify_analysis(
+                output=output,
+                all_segments=segments_payload,
+                chunk_findings=chunk_findings,
+            )
+            verification_performed = True
+            verification_model = self.settings.LLM_MODEL
+            if not report.is_complete:
+                logger.warning(
+                    "Meeting %s analysis incomplete: %s",
+                    meeting_id,
+                    "; ".join(report.warnings),
                 )
-                if not verified:
-                    # Drop ungrounded owner
-                    item.owner = None
-                verification_performed = True
-                verification_model = self.settings.LLM_MODEL
+
+        # 3. Filter evidence segment IDs to only valid database segment IDs
+        valid_uuids = set(segment_map.keys())
 
         # 4. Filter evidence segment IDs to only valid database segment IDs
         for topic in output.topics:
@@ -181,6 +180,9 @@ class AnalysisService:
                 pricing_version=PRICING_VERSION,
                 verification_performed=verification_performed,
                 verification_model=verification_model,
+                speaker_contributions=output.speaker_contributions,
+                context_and_details=output.context_and_details,
+                next_steps=output.next_steps,
             )
             await self.analysis_repo.delete_child_entities(analysis.id)
         else:
@@ -198,6 +200,9 @@ class AnalysisService:
                 pricing_version=PRICING_VERSION,
                 verification_performed=verification_performed,
                 verification_model=verification_model,
+                speaker_contributions=output.speaker_contributions,
+                context_and_details=output.context_and_details,
+                next_steps=output.next_steps,
             )
 
         # 7. Persist child entities with deterministically derived timestamps
@@ -205,6 +210,7 @@ class AnalysisService:
             {
                 "title": t.title,
                 "summary": t.summary,
+                "discussion_progression": t.discussion_progression,
                 "sequence_index": idx,
                 "start_time": self._derive_timestamps(t.evidence_segment_ids, segment_map)[0],
                 "end_time": self._derive_timestamps(t.evidence_segment_ids, segment_map)[1],

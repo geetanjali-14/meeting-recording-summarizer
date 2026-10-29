@@ -1,7 +1,7 @@
 import enum
 import uuid
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     Boolean,
@@ -13,7 +13,7 @@ from sqlalchemy import (
     Numeric,
     String,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -57,6 +57,18 @@ class MeetingAnalysis(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     pricing_version: Mapped[str | None] = mapped_column(String, nullable=True)
     verification_performed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     verification_model: Mapped[str | None] = mapped_column(String, nullable=True)
+    speaker_contributions: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default="{}", nullable=False
+    )
+    context_and_details: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, server_default="[]", nullable=False
+    )
+    next_steps: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, server_default="[]", nullable=False
+    )
+    structured_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default="{}", nullable=False
+    )
 
     # Relationships
     meeting: Mapped["Meeting"] = relationship("Meeting", back_populates="analysis")
@@ -111,6 +123,7 @@ class Topic(Base, UUIDPrimaryKeyMixin):
     )
     title: Mapped[str] = mapped_column(String, nullable=False)
     summary: Mapped[str | None] = mapped_column(String, nullable=True)
+    discussion_progression: Mapped[str | None] = mapped_column(String, nullable=True)
     sequence_index: Mapped[int] = mapped_column(Integer, nullable=False)
     start_time: Mapped[float | None] = mapped_column(Float, nullable=True)
     end_time: Mapped[float | None] = mapped_column(Float, nullable=True)

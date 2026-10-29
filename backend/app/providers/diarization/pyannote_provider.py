@@ -34,7 +34,7 @@ class PyannoteDiarizationProvider(DiarizationProvider):
             )
 
         try:
-            from pyannote.audio import Pipeline
+            from pyannote.audio import Pipeline  # type: ignore[import-not-found]
 
             self._pipeline = Pipeline.from_pretrained(
                 self.MODEL_ID,
@@ -63,8 +63,25 @@ class PyannoteDiarizationProvider(DiarizationProvider):
             )
 
         pipeline = self._get_pipeline()
+        # Load and resample audio via torchaudio/soundfile or Pyannote audio IO
         try:
-            diarize_output = pipeline(str(path))
+            import torch
+            import torchaudio
+            # Pre-load audio to ensure 16kHz mono tensor or pass valid AudioFile dict
+            waveform, sample_rate = torchaudio.load(str(path))
+            if sample_rate != 16000:
+                resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+                waveform = resampler(waveform)
+                sample_rate = 16000
+            if waveform.shape[0] > 1:
+                waveform = torch.mean(waveform, dim=0, keepdim=True)
+            audio_input: Any = {"waveform": waveform, "sample_rate": sample_rate}
+        except Exception as load_exc:
+            logger.debug("Falling back to direct path input for pyannote pipeline: %s", load_exc)
+            audio_input = str(path)
+
+        try:
+            diarize_output = pipeline(audio_input)
         except Exception as exc:
             raise DiarizationProviderError(
                 f"pyannote diarization failed on audio file: {exc}",

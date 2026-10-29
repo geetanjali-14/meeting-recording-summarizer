@@ -61,6 +61,7 @@ class SlidingWindowRateLimiter:
 
 create_meeting_limiter = SlidingWindowRateLimiter(max_requests=20, window_seconds=3600)
 confirm_upload_limiter = SlidingWindowRateLimiter(max_requests=20, window_seconds=3600)
+job_control_limiter = SlidingWindowRateLimiter(max_requests=30, window_seconds=60)
 status_polling_limiter = SlidingWindowRateLimiter(max_requests=300, window_seconds=60)
 general_read_limiter = SlidingWindowRateLimiter(max_requests=120, window_seconds=60)
 

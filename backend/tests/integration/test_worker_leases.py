@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -123,3 +124,143 @@ async def test_terminal_jobs_cannot_be_claimed() -> None:
     tracker = JobLeaseTracker(session, lease_duration_seconds=120)
     claimed = await tracker.claim_job(job_id=job_id, worker_id="worker-late")
     assert claimed is None
+
+
+@pytest.mark.asyncio
+async def test_job_lease_release_to_retry_resets_worker_and_stores_error() -> None:
+    session = AsyncMock()
+    job_id = uuid.uuid4()
+
+    job = ProcessingJob(
+        id=job_id,
+        meeting_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+        status=JobStatus.RUNNING,
+        stage=JobStage.TRANSCRIBING,
+        worker_id="test-worker",
+        attempt=1,
+    )
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = job
+    session.execute.return_value = mock_result
+
+    tracker = JobLeaseTracker(session, lease_duration_seconds=120)
+    released = await tracker.release_lease(
+        job_id=job_id,
+        worker_id="test-worker",
+        target_status=JobStatus.PENDING,
+        target_stage=JobStage.CREATED,
+        error_code="RATE_LIMIT",
+        error_message="Too many requests",
+    )
+
+    assert released is not None
+    assert released.status == JobStatus.PENDING
+    assert released.stage == JobStage.CREATED
+    assert released.worker_id is None
+    assert released.lease_expires_at is None
+    assert released.error_code == "RATE_LIMIT"
+    assert released.error_message == "Too many requests"
+
+
+@pytest.mark.asyncio
+async def test_job_lease_release_to_failed_stores_error() -> None:
+    session = AsyncMock()
+    job_id = uuid.uuid4()
+
+    job = ProcessingJob(
+        id=job_id,
+        meeting_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+        status=JobStatus.RUNNING,
+        stage=JobStage.TRANSCRIBING,
+        worker_id="test-worker",
+        attempt=3,
+    )
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = job
+    session.execute.return_value = mock_result
+
+    tracker = JobLeaseTracker(session, lease_duration_seconds=120)
+    released = await tracker.release_lease(
+        job_id=job_id,
+        worker_id="test-worker",
+        target_status=JobStatus.FAILED,
+        target_stage=JobStage.FAILED,
+        error_code="PAYLOAD_TOO_LARGE",
+        error_message="Audio exceeds 25MB limit",
+    )
+
+    assert released is not None
+    assert released.status == JobStatus.FAILED
+    assert released.stage == JobStage.FAILED
+    assert released.error_code == "PAYLOAD_TOO_LARGE"
+    assert released.error_message == "Audio exceeds 25MB limit"
+
+
+@pytest.mark.asyncio
+async def test_stage_updates_are_committed_and_observable_by_separate_session() -> None:
+    """Regression test: update_stage commits immediately so external sessions observe stage."""
+    from app.repositories.job_repository import JobRepository
+
+    # Shared storage simulating the underlying database table
+    db_store: dict[str, Any] = {}
+
+    worker_session = AsyncMock()
+    user_id = uuid.uuid4()
+    meeting_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+
+    job = ProcessingJob(
+        id=job_id,
+        meeting_id=meeting_id,
+        user_id=user_id,
+        status=JobStatus.RUNNING,
+        stage=JobStage.VALIDATING,
+        attempt=1,
+    )
+
+    async def mock_worker_commit():
+        # On commit, the worker's changes are published to the database
+        db_store["stage"] = job.stage
+        db_store["status"] = job.status
+
+    worker_session.commit.side_effect = mock_worker_commit
+
+    # 1. Worker session updates stage to TRANSCRIBING
+    job_repo = JobRepository(worker_session)
+    await job_repo.update_stage(job=job, stage=JobStage.TRANSCRIBING)
+
+    # Verify commit was awaited
+    worker_session.commit.assert_awaited()
+    # Verify the database reflects TRANSCRIBING
+    assert db_store["stage"] == JobStage.TRANSCRIBING
+
+    # 2. A separate API session reads from the database while worker is still processing
+    api_session = AsyncMock()
+    mock_api_job = ProcessingJob(
+        id=job_id,
+        meeting_id=meeting_id,
+        user_id=user_id,
+        status=db_store["status"],
+        stage=db_store["stage"],
+        attempt=1,
+    )
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_api_job
+    api_session.execute.return_value = mock_result
+
+    api_repo = JobRepository(api_session)
+    observed_job = await api_repo.get_by_id(job_id=job_id, user_id=user_id)
+    assert observed_job is not None
+    assert observed_job.stage == JobStage.TRANSCRIBING
+
+    # 3. Worker updates to DIARIZING
+    await job_repo.update_stage(job=job, stage=JobStage.DIARIZING)
+    assert db_store["stage"] == JobStage.DIARIZING
+
+    # 4. Another query from API session observes DIARIZING
+    mock_api_job.stage = db_store["stage"]
+    observed_job_2 = await api_repo.get_by_id(job_id=job_id, user_id=user_id)
+    assert observed_job_2 is not None
+    assert observed_job_2.stage == JobStage.DIARIZING

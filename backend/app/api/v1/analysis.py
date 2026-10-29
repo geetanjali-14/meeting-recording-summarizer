@@ -87,6 +87,7 @@ async def get_meeting_analysis(
                 sequence_index=t.sequence_index,
                 title=t.title,
                 summary=t.summary,
+                discussion_progression=t.discussion_progression,
                 start_time=t.start_time,
                 end_time=t.end_time,
             )
@@ -139,6 +140,9 @@ async def get_meeting_analysis(
             )
             for q in sorted(analysis.open_questions, key=lambda x: x.sequence_index)
         ],
+        speaker_contributions=analysis.speaker_contributions or {},
+        context_and_details=analysis.context_and_details or [],
+        next_steps=analysis.next_steps or [],
     )
 
     envelope = SuccessEnvelope(data=response_data, meta=create_meta(request))

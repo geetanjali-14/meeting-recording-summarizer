@@ -109,7 +109,7 @@ async def test_get_processing_status_tenant_isolation(
 async def test_database_error_handling_and_logging(
     mock_user_context: UserContext,
 ) -> None:
-    """Verifies that database operational/programming errors return 500 without leaking stack traces or credentials."""
+    """Verifies that DB operational/programming errors return 500 without leaking credentials."""
     app = create_app()
     meeting_id = uuid.uuid4()
 
@@ -260,8 +260,8 @@ async def test_stream_processing_events_sse(mock_user_context: UserContext) -> N
     app.dependency_overrides[get_current_user] = lambda: mock_user_context
     app.dependency_overrides[get_db_session] = lambda: mock_session
 
-    from unittest.mock import patch
     from contextlib import asynccontextmanager
+    from unittest.mock import patch
 
     @asynccontextmanager
     async def mock_async_session_factory():

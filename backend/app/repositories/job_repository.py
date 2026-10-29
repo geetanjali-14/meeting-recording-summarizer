@@ -31,11 +31,14 @@ class JobRepository:
         self,
         meeting_id: uuid.UUID,
         user_id: uuid.UUID,
+        for_update: bool = False,
     ) -> ProcessingJob | None:
         stmt = select(ProcessingJob).where(
             ProcessingJob.meeting_id == meeting_id,
             ProcessingJob.user_id == user_id,
         )
+        if for_update:
+            stmt = stmt.with_for_update()
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -67,6 +70,7 @@ class JobRepository:
     ) -> ProcessingJob:
         job.stage = stage
         await self.session.flush()
+        await self.session.commit()
         return job
 
     async def set_celery_task_id(

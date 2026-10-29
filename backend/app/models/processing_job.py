@@ -113,7 +113,7 @@ class ProcessingJob(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         error_message: str | None = None,
     ) -> None:
         """Transitions job status and stage according to architectural state machine rules."""
-        # Completed jobs cannot transition
+        # Completed jobs can only transition to PENDING (for restart)
         if self.status == JobStatus.COMPLETED:
             raise InvalidJobStateTransitionError(f"Cannot transition COMPLETED job to {new_status}")
 

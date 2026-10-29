@@ -14,8 +14,11 @@ from app.schemas.envelope import (
 
 def get_request_id(request: Request) -> str:
     """Extracts or generates request_id for response envelope and tracing."""
-    req_id = request.headers.get("X-Request-ID")
-    if not req_id:
+    try:
+        req_id = request.headers.get("X-Request-ID")
+    except Exception:
+        req_id = None
+    if not req_id or not isinstance(req_id, str):
         req_id = str(uuid.uuid4())
     return req_id
 

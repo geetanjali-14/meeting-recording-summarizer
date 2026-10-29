@@ -1,8 +1,10 @@
+import asyncio
 import logging
 import uuid
 from typing import Any
 
 from app.core.config import Settings
+from app.models.meeting import MeetingStatus
 from app.models.processing_job import JobStage, JobStatus, ProcessingJob
 from app.providers.storage.base import StorageProvider
 from app.providers.transcription.base import (
@@ -66,6 +68,24 @@ class ProcessingService:
         self.alignment_service = alignment_service or AlignmentService()
         self.analysis_service = analysis_service
 
+    async def _safe_commit(self) -> None:
+        """Safely commits the database session if available and awaitable."""
+        session = getattr(self.job_repo, "session", None)
+        commit_fn = getattr(session, "commit", None)
+        if callable(commit_fn):
+            res = commit_fn()
+            if asyncio.iscoroutine(res) or hasattr(res, "__await__"):
+                await res
+
+    async def _safe_rollback(self) -> None:
+        """Safely rolls back the database session if available and awaitable."""
+        session = getattr(self.job_repo, "session", None)
+        rollback_fn = getattr(session, "rollback", None)
+        if callable(rollback_fn):
+            res = rollback_fn()
+            if asyncio.iscoroutine(res) or hasattr(res, "__await__"):
+                await res
+
     async def execute_job(
         self,
         job_id: uuid.UUID,
@@ -90,12 +110,17 @@ class ProcessingService:
                 is_retryable=True,
             )
 
+        # Commit claimed lease state so worker ownership and RUNNING status are immediately visible
+        await self._safe_commit()
+
         try:
             # Check meeting and recording existence
             meeting = await self.meeting_repo.get_by_id_system(meeting_id=meeting_id)
-            if meeting is None:
+            if meeting is None or meeting.status in (MeetingStatus.DELETING, MeetingStatus.PURGED):
                 raise ProcessingPipelineError(
-                    f"Meeting {meeting_id} not found", error_code="MEETING_NOT_FOUND"
+                    f"Meeting {meeting_id} not found or deleted",
+                    error_code="MEETING_DELETED",
+                    is_retryable=False,
                 )
 
             recording = await self.recording_repo.get_by_meeting_id_system(meeting_id=meeting_id)
@@ -103,9 +128,10 @@ class ProcessingService:
                 raise ProcessingPipelineError(
                     f"Recording for meeting {meeting_id} not found",
                     error_code="RECORDING_NOT_FOUND",
+                    is_retryable=False,
                 )
 
-            # Check if transcript segments already exist (Idempotency checkpoint)
+            # Check if transcript segments already exist (Idempotency checkpoint & Stage Resumption)
             existing_transcript = await self.transcript_repo.get_by_meeting_id(
                 meeting_id=meeting_id, user_id=job.user_id
             )
@@ -115,16 +141,78 @@ class ProcessingService:
                 and existing_transcript.segment_count > 0
             ):
                 logger.info(
-                    "Transcript segments already exist for meeting %s. Checkpoint reuse.",
+                    "Transcript segments already exist for meeting %s (%d segments). Checking analysis checkpoint.",
+                    meeting_id,
+                    existing_transcript.segment_count,
+                )
+                existing_analysis = None
+                if self.analysis_service:
+                    existing_analysis = await self.analysis_service.analysis_repo.get_by_meeting_id(
+                        meeting_id=meeting_id, user_id=job.user_id
+                    )
+
+                # If both transcript and analysis already exist, mark job as completed
+                if existing_analysis or not self.analysis_service:
+                    logger.info("Meeting %s already has valid transcript and analysis. Completing job.", meeting_id)
+                    completed_job = await lease_tracker.release_lease(
+                        job_id=job_id,
+                        worker_id=worker_id,
+                        target_status=JobStatus.COMPLETED,
+                        target_stage=JobStage.COMPLETED,
+                    )
+                    await self._safe_commit()
+                    return completed_job or job
+
+                # Transcript is valid, but analysis is missing/incomplete: Resume directly from ANALYZING!
+                logger.info(
+                    "Meeting %s has transcript but missing analysis. Resuming from ANALYZING stage, avoiding re-transcription.",
                     meeting_id,
                 )
-                await lease_tracker.release_lease(
+                await self.job_repo.update_stage(job=job, stage=JobStage.ANALYZING)
+                await lease_tracker.renew_heartbeat(job_id=job_id, worker_id=worker_id)
+
+                db_segments = await self.transcript_repo.get_segments_by_transcript(
+                    existing_transcript.id
+                )
+
+                async def record_verifying_stage() -> None:
+                    await self.job_repo.update_stage(job=job, stage=JobStage.VERIFYING)
+                    await lease_tracker.renew_heartbeat(job_id=job_id, worker_id=worker_id)
+
+                try:
+                    await self.analysis_service.execute_analysis(
+                        meeting_id=meeting_id,
+                        user_id=job.user_id,
+                        segments=list(db_segments),
+                        on_stage_change=record_verifying_stage,
+                    )
+                except Exception as exc:
+                    raise ProcessingPipelineError(
+                        f"Meeting intelligence extraction failed: {exc}",
+                        error_code="ANALYSIS_FAILED",
+                        is_retryable=False,
+                    ) from exc
+
+                current_meeting = await self.meeting_repo.get_by_id_system(meeting_id=meeting_id)
+                if current_meeting is None or current_meeting.status in (
+                    MeetingStatus.DELETING,
+                    MeetingStatus.PURGED,
+                ):
+                    raise ProcessingPipelineError(
+                        f"Meeting {meeting_id} deleted during processing",
+                        error_code="MEETING_DELETED",
+                        is_retryable=False,
+                    )
+
+                completed_job = await lease_tracker.release_lease(
                     job_id=job_id,
                     worker_id=worker_id,
                     target_status=JobStatus.COMPLETED,
                     target_stage=JobStage.COMPLETED,
                 )
-                return job
+                await self._safe_commit()
+                logger.info("Job %s completed successfully via resumed analysis.", job_id)
+                return completed_job or job
 
             # Execute pipeline within clean isolated scratch directory
             with self.audio_service.temporary_scratch_dir(
@@ -202,24 +290,52 @@ class ProcessingService:
                     try:
                         diarization_result = self.diarization_service.diarize_audio(local_wav_path)
                         diarization_provider_name = diarization_result.provider
-                        transcription_result.segments = self.alignment_service.align(
-                            segments=transcription_result.segments,
-                            turns=diarization_result.turns,
-                        )
+                        if diarization_result.turns:
+                            transcription_result.segments = self.alignment_service.align(
+                                segments=transcription_result.segments,
+                                turns=diarization_result.turns,
+                            )
                     except DiarizationProcessingError as exc:
-                        raise ProcessingPipelineError(
-                            f"Diarization failed: {exc.message}",
-                            error_code="DIARIZATION_FAILED",
-                            is_retryable=exc.is_retryable,
-                        ) from exc
+                        if self.settings and self.settings.APP_ENV == "production":
+                            raise ProcessingPipelineError(
+                                f"Diarization stage failed in production: {exc.message}",
+                                error_code="DIARIZATION_FAILED",
+                                is_retryable=exc.is_retryable,
+                            ) from exc
+                        logger.warning(
+                            "Diarization unavailable or failed for meeting %s: %s. "
+                            "Continuing with non-diarized transcript segments in non-production environment.",
+                            meeting_id,
+                            exc.message,
+                        )
+                        diarization_provider_name = None
                     except Exception as exc:
-                        raise ProcessingPipelineError(
-                            f"Unexpected diarization error: {exc}",
-                            error_code="DIARIZATION_FAILED",
-                            is_retryable=False,
-                        ) from exc
+                        if self.settings and self.settings.APP_ENV == "production":
+                            raise ProcessingPipelineError(
+                                f"Unexpected diarization failure in production: {exc}",
+                                error_code="DIARIZATION_FAILED",
+                                is_retryable=False,
+                            ) from exc
+                        logger.warning(
+                            "Unexpected diarization exception for meeting %s: %s. "
+                            "Continuing with non-diarized transcript segments in non-production environment.",
+                            meeting_id,
+                            exc,
+                        )
+                        diarization_provider_name = None
 
                 # Stage 5: SAVING — Persist transcript and transcript_segments
+                current_meeting = await self.meeting_repo.get_by_id_system(meeting_id=meeting_id)
+                if current_meeting is None or current_meeting.status in (
+                    MeetingStatus.DELETING,
+                    MeetingStatus.PURGED,
+                ):
+                    raise ProcessingPipelineError(
+                        f"Meeting {meeting_id} deleted during processing",
+                        error_code="MEETING_DELETED",
+                        is_retryable=False,
+                    )
+
                 await self.job_repo.update_stage(job=job, stage=JobStage.SAVING)
                 await lease_tracker.renew_heartbeat(job_id=job_id, worker_id=worker_id)
 
@@ -281,7 +397,7 @@ class ProcessingService:
                         transcript.id
                     )
 
-                    async def record_verifying_stage():
+                    async def record_verifying_stage() -> None:
                         await self.job_repo.update_stage(job=job, stage=JobStage.VERIFYING)
                         await lease_tracker.renew_heartbeat(job_id=job_id, worker_id=worker_id)
 
@@ -300,12 +416,24 @@ class ProcessingService:
                         ) from exc
 
                 # Stage 6: Release lease as COMPLETED
+                current_meeting = await self.meeting_repo.get_by_id_system(meeting_id=meeting_id)
+                if current_meeting is None or current_meeting.status in (
+                    MeetingStatus.DELETING,
+                    MeetingStatus.PURGED,
+                ):
+                    raise ProcessingPipelineError(
+                        f"Meeting {meeting_id} deleted during processing",
+                        error_code="MEETING_DELETED",
+                        is_retryable=False,
+                    )
+
                 completed_job = await lease_tracker.release_lease(
                     job_id=job_id,
                     worker_id=worker_id,
                     target_status=JobStatus.COMPLETED,
                     target_stage=JobStage.COMPLETED,
                 )
+                await self._safe_commit()
                 logger.info(
                     "Job %s completed successfully with %d transcript segments.",
                     job_id,
@@ -320,9 +448,27 @@ class ProcessingService:
                 exc.message,
                 exc.is_retryable,
             )
+            # Read attempt counters before rollback to avoid expired attribute reload
             attempt = job.attempt or 0
             max_attempts = job.max_attempts or 3
-            if exc.is_retryable and attempt < max_attempts:
+
+            # Roll back dirty state (e.g. partial analysis or transcript records)
+            try:
+                await self._safe_rollback()
+            except Exception as rb_err:
+                logger.warning("Session rollback warning for job %s: %s", job_id, rb_err)
+
+            if exc.error_code == "MEETING_DELETED":
+                # Meeting was deleted; cleanly mark job CANCELLED without retry
+                await lease_tracker.release_lease(
+                    job_id=job_id,
+                    worker_id=worker_id,
+                    target_status=JobStatus.CANCELLED,
+                    target_stage=JobStage.FAILED,
+                    error_code=exc.error_code,
+                    error_message=exc.message,
+                )
+            elif exc.is_retryable and attempt < max_attempts:
                 # Mark as PENDING so it can be re-attempted
                 await lease_tracker.release_lease(
                     job_id=job_id,
@@ -342,9 +488,19 @@ class ProcessingService:
                     error_code=exc.error_code,
                     error_message=exc.message,
                 )
+            try:
+                await self._safe_commit()
+            except Exception as commit_err:
+                logger.error("Failed to commit job terminal state: %s", commit_err)
             raise
         except Exception as exc:
             logger.error("Unexpected error in pipeline for job %s: %s", job_id, exc, exc_info=True)
+            # Roll back any uncommitted dirty state before setting terminal failure
+            try:
+                await self._safe_rollback()
+            except Exception as rb_err:
+                logger.warning("Session rollback warning for job %s: %s", job_id, rb_err)
+
             await lease_tracker.release_lease(
                 job_id=job_id,
                 worker_id=worker_id,
@@ -353,4 +509,8 @@ class ProcessingService:
                 error_code="UNEXPECTED_ERROR",
                 error_message=str(exc),
             )
+            try:
+                await self._safe_commit()
+            except Exception as commit_err:
+                logger.error("Failed to commit job unexpected failure state: %s", commit_err)
             raise

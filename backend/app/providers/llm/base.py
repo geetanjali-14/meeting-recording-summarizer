@@ -25,10 +25,18 @@ class LLMResponse(BaseModel):
 class LLMProviderError(Exception):
     """Exception raised by LLM providers during inference."""
 
-    def __init__(self, message: str, is_retryable: bool = False) -> None:
+    def __init__(
+        self,
+        message: str,
+        is_retryable: bool = False,
+        retry_after: float | None = None,
+        status_code: int | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.is_retryable = is_retryable
+        self.retry_after = retry_after
+        self.status_code = status_code
 
 
 class LLMProvider(ABC):

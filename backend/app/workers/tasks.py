@@ -10,6 +10,7 @@ from app.agents.verification_agent import VerificationAgent
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.core.database import get_session
+from app.models.processing_job import JobStage, JobStatus
 from app.providers.diarization import get_diarization_provider
 from app.providers.llm import get_llm_provider
 from app.providers.storage import get_storage_provider
@@ -118,6 +119,27 @@ def process_meeting_recording(self: Task, job_id_str: str, meeting_id_str: str) 
                 "stage": job.stage.value,
             }
 
+    async def _mark_failed_fallback(err_code: str, err_msg: str) -> None:
+        """Fallback to persist failure and release lease if unhandled error escaped."""
+        try:
+            settings = get_settings()
+            async with get_session() as session:
+                tracker = JobLeaseTracker(
+                    session,
+                    lease_duration_seconds=settings.WORKER_LEASE_DURATION_SECONDS,
+                )
+                await tracker.release_lease(
+                    job_id=job_id,
+                    worker_id=worker_id,
+                    target_status=JobStatus.FAILED,
+                    target_stage=JobStage.FAILED,
+                    error_code=err_code,
+                    error_message=err_msg,
+                )
+                await session.commit()
+        except Exception as fallback_err:
+            logger.error("Failed in _mark_failed_fallback: %s", fallback_err)
+
     try:
         return asyncio.run(_run())
 
@@ -133,4 +155,5 @@ def process_meeting_recording(self: Task, job_id_str: str, meeting_id_str: str) 
         raise
     except Exception as exc:
         logger.error("Unhandled failure in process_meeting_recording: %s", exc, exc_info=True)
+        asyncio.run(_mark_failed_fallback("UNHANDLED_EXCEPTION", str(exc)))
         raise

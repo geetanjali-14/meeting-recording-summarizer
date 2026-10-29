@@ -75,6 +75,7 @@ class MeetingRepository:
             .where(
                 Meeting.user_id == user_id,
                 Meeting.status != MeetingStatus.PURGED,
+                Meeting.status != MeetingStatus.DELETING,
             )
             .order_by(Meeting.created_at.desc())
             .limit(limit)
@@ -95,10 +96,11 @@ class MeetingRepository:
         self,
         user_id: uuid.UUID,
     ) -> int:
-        """Counts total non-purged meetings for a user."""
+        """Counts total non-purged and non-deleting meetings for a user."""
         stmt = select(func.count(Meeting.id)).where(
             Meeting.user_id == user_id,
             Meeting.status != MeetingStatus.PURGED,
+            Meeting.status != MeetingStatus.DELETING,
         )
         result = await self.session.execute(stmt)
         return result.scalar_one() or 0
@@ -124,10 +126,21 @@ class MeetingRepository:
         meeting_id: uuid.UUID,
         user_id: uuid.UUID,
     ) -> bool:
-        """Permanently removes meeting row or marks PURGED after cleanup."""
-        meeting = await self.get_by_id(
-            meeting_id=meeting_id, user_id=user_id, include_relations=True
+        """Permanently removes meeting row cascading all dependent models."""
+        stmt = (
+            select(Meeting)
+            .where(
+                Meeting.id == meeting_id,
+                Meeting.user_id == user_id,
+                Meeting.status != MeetingStatus.PURGED,
+            )
+            .options(
+                selectinload(Meeting.recording),
+                selectinload(Meeting.job),
+            )
         )
+        result = await self.session.execute(stmt)
+        meeting = result.scalar_one_or_none()
         if meeting is None:
             return False
         await self.session.delete(meeting)

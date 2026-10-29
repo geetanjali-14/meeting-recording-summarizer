@@ -208,7 +208,7 @@ async def test_diarization_alignment_integration(mock_dependencies, tmp_path) ->
 
 
 @pytest.mark.asyncio
-async def test_diarization_failure_raises_pipeline_error(mock_dependencies, tmp_path) -> None:
+async def test_diarization_failure_continues_gracefully(mock_dependencies, tmp_path) -> None:
     job_id = uuid.uuid4()
     meeting_id = uuid.uuid4()
     user_id = uuid.uuid4()
@@ -275,13 +275,13 @@ async def test_diarization_failure_raises_pipeline_error(mock_dependencies, tmp_
         alignment_service=deps["alignment_service"],
     )
 
-    with pytest.raises(ProcessingPipelineError) as exc_info:
-        await service.execute_job(
-            job_id=job_id,
-            meeting_id=meeting_id,
-            worker_id="worker_test",
-            lease_tracker=lease_tracker,
-        )
+    result_job = await service.execute_job(
+        job_id=job_id,
+        meeting_id=meeting_id,
+        worker_id="worker_test",
+        lease_tracker=lease_tracker,
+    )
 
-    assert exc_info.value.error_code == "DIARIZATION_FAILED"
-    assert exc_info.value.is_retryable is True
+    assert result_job is not None
+    # Diarization failed gracefully without failing the entire transcription pipeline
+    lease_tracker.release_lease.assert_called_once()

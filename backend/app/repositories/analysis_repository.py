@@ -38,6 +38,10 @@ class AnalysisRepository:
         pricing_version: str | None = None,
         verification_performed: bool = False,
         verification_model: str | None = None,
+        speaker_contributions: dict[str, Any] | None = None,
+        context_and_details: list[dict[str, Any]] | None = None,
+        next_steps: list[dict[str, Any]] | None = None,
+        structured_data: dict[str, Any] | None = None,
     ) -> MeetingAnalysis:
         analysis = MeetingAnalysis(
             meeting_id=meeting_id,
@@ -53,6 +57,10 @@ class AnalysisRepository:
             pricing_version=pricing_version,
             verification_performed=verification_performed,
             verification_model=verification_model,
+            speaker_contributions=speaker_contributions if speaker_contributions is not None else {},
+            context_and_details=context_and_details if context_and_details is not None else [],
+            next_steps=next_steps if next_steps is not None else [],
+            structured_data=structured_data if structured_data is not None else {},
         )
         self.session.add(analysis)
         await self.session.flush()
@@ -72,6 +80,10 @@ class AnalysisRepository:
         pricing_version: str | None = None,
         verification_performed: bool = False,
         verification_model: str | None = None,
+        speaker_contributions: dict[str, Any] | None = None,
+        context_and_details: list[dict[str, Any]] | None = None,
+        next_steps: list[dict[str, Any]] | None = None,
+        structured_data: dict[str, Any] | None = None,
     ) -> MeetingAnalysis:
         """Updates top-level analysis record upon rerun."""
         analysis.provider = provider
@@ -85,6 +97,14 @@ class AnalysisRepository:
         analysis.pricing_version = pricing_version
         analysis.verification_performed = verification_performed
         analysis.verification_model = verification_model
+        if speaker_contributions is not None:
+            analysis.speaker_contributions = speaker_contributions
+        if context_and_details is not None:
+            analysis.context_and_details = context_and_details
+        if next_steps is not None:
+            analysis.next_steps = next_steps
+        if structured_data is not None:
+            analysis.structured_data = structured_data
         await self.session.flush()
         return analysis
 
@@ -132,6 +152,7 @@ class AnalysisRepository:
                 meeting_id=meeting_id,
                 title=t["title"],
                 summary=t.get("summary"),
+                discussion_progression=t.get("discussion_progression"),
                 sequence_index=t.get("sequence_index", idx),
                 start_time=t.get("start_time"),
                 end_time=t.get("end_time"),

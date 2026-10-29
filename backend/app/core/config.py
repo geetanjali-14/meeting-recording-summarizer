@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = "placeholder-anon-key"
     JWT_ISSUER: str = "https://example-project.supabase.co/auth/v1"
     JWT_AUDIENCE: str = "authenticated"
-    JWT_ALGORITHMS: Union[list[str], str] = ["HS256", "RS256", "ES256"]
+    JWT_ALGORITHMS: list[str] | str = ["HS256", "RS256", "ES256"]
     JWT_SIGNING_KEY_OR_JWKS: str = "dev-insecure-secret-key-change-in-production"
     JWKS_CACHE_TTL_SECONDS: int = 300
     UPLOAD_TOKEN_SECRET: str = "dev-insecure-upload-token-secret-change-in-production"
@@ -73,7 +73,9 @@ class Settings(BaseSettings):
     TRANSCRIPTION_API_KEY: str = "gsk_placeholder_groq_api_key"
     TRANSCRIPTION_MODEL: str = "whisper-large-v3-turbo"
     TRANSCRIPTION_TIMEOUT_SECONDS: int = 300
-    DIARIZATION_PROVIDER: Literal["pyannote_community_1", "mock"] = "pyannote_community_1"
+    DIARIZATION_PROVIDER: Literal["pyannote_community_1", "none", "mock"] = (
+        "pyannote_community_1"
+    )
     HF_TOKEN: str = "hf_placeholder_token"
 
     # 7. Celery & Redis Task Broker
@@ -89,7 +91,7 @@ class Settings(BaseSettings):
     WORKER_MAX_ATTEMPTS: int = 3
 
     # 8. Frontend / CORS
-    CORS_ORIGINS: Union[list[str], str] = [
+    CORS_ORIGINS: list[str] | str = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://meeting-recording-summarizer.vercel.app",
@@ -135,11 +137,22 @@ class Settings(BaseSettings):
                 raise ValueError("DATABASE_URL cannot use localhost in production.")
             if "localhost" in self.REDIS_URL or "127.0.0.1" in self.REDIS_URL:
                 raise ValueError("REDIS_URL cannot use localhost in production.")
+            if self.STORAGE_PROVIDER == "mock":
+                raise ValueError("STORAGE_PROVIDER cannot be 'mock' in production.")
+            if self.LLM_PROVIDER == "mock":
+                raise ValueError("LLM_PROVIDER cannot be 'mock' in production.")
+            if self.TRANSCRIPTION_PROVIDER == "mock":
+                raise ValueError("TRANSCRIPTION_PROVIDER cannot be 'mock' in production.")
+            if self.DIARIZATION_PROVIDER in ("mock", "none"):
+                raise ValueError(
+                    "DIARIZATION_PROVIDER cannot be 'mock' or 'none' in production. "
+                    "A valid diarization provider (such as 'pyannote_community_1') is required."
+                )
             if "placeholder" in self.STORAGE_ACCESS_KEY_ID:
                 raise ValueError("Valid STORAGE_ACCESS_KEY_ID is required in production.")
             if "placeholder" in self.STORAGE_SECRET_ACCESS_KEY:
                 raise ValueError("Valid STORAGE_SECRET_ACCESS_KEY is required in production.")
-            if "placeholder" in self.LLM_API_KEY and self.LLM_PROVIDER != "mock":
+            if "placeholder" in self.LLM_API_KEY:
                 raise ValueError("Valid LLM_API_KEY is required in production.")
             if "dev-insecure-secret-key" in self.JWT_SIGNING_KEY_OR_JWKS:
                 raise ValueError("Insecure default JWT key cannot be used in production.")

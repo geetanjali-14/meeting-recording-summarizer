@@ -18,14 +18,11 @@ def test_job_state_machine_valid_status_transitions() -> None:
 
 
 def test_job_state_machine_invalid_status_transitions() -> None:
-    # COMPLETED is terminal
-    with pytest.raises(InvalidJobStateTransitionError):
-        JobStateMachine.validate_status_transition(JobStatus.COMPLETED, JobStatus.PENDING)
-
+    # COMPLETED cannot directly transition to RUNNING
     with pytest.raises(InvalidJobStateTransitionError):
         JobStateMachine.validate_status_transition(JobStatus.COMPLETED, JobStatus.RUNNING)
 
-    # CANCELLED is terminal
+    # CANCELLED cannot directly transition to RUNNING
     with pytest.raises(InvalidJobStateTransitionError):
         JobStateMachine.validate_status_transition(JobStatus.CANCELLED, JobStatus.RUNNING)
 

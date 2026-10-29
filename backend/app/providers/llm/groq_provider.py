@@ -1,5 +1,8 @@
+import email.utils
 import json
 import logging
+import re
+import time
 from typing import Any
 
 import httpx
@@ -13,6 +16,61 @@ from app.providers.llm.base import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def parse_groq_reset_duration(val: str) -> float | None:
+    """Parses Groq reset string format (e.g. '2m59.56s', '7.66s', '1h2m3s') into seconds."""
+    val = val.strip()
+    if not val:
+        return None
+    try:
+        return float(val)
+    except ValueError:
+        pass
+
+    pattern = re.compile(r"((?P<hours>\d+)h)?((?P<minutes>\d+)m)?((?P<seconds>[\d\.]+)s)?")
+    match = pattern.fullmatch(val)
+    if not match:
+        return None
+
+    groups = match.groupdict()
+    hours = float(groups.get("hours") or 0.0)
+    minutes = float(groups.get("minutes") or 0.0)
+    seconds = float(groups.get("seconds") or 0.0)
+    total = (hours * 3600.0) + (minutes * 60.0) + seconds
+    return total if total > 0.0 else None
+
+
+def parse_retry_after_header(headers: httpx.Headers) -> float | None:
+    """Extracts wait duration in seconds from Retry-After or Groq rate limit reset headers.
+
+    Priority:
+    1. Standard 'Retry-After' (integer/float seconds or HTTP-date).
+    2. 'x-ratelimit-reset-tokens' or 'x-ratelimit-reset-requests' (e.g., '7.66s', '2m59.56s').
+    """
+    raw_retry = headers.get("retry-after")
+    if raw_retry:
+        raw_retry = raw_retry.strip()
+        try:
+            return max(0.0, float(raw_retry))
+        except ValueError:
+            # Check for HTTP-date format (RFC 7231 / RFC 2616)
+            try:
+                date_tuple = email.utils.parsedate_to_datetime(raw_retry)
+                diff = date_tuple.timestamp() - time.time()
+                return max(0.0, diff)
+            except Exception:
+                pass
+
+    # Fallback to Groq duration reset headers
+    for reset_key in ("x-ratelimit-reset-tokens", "x-ratelimit-reset-requests"):
+        reset_val = headers.get(reset_key)
+        if reset_val:
+            duration = parse_groq_reset_duration(reset_val)
+            if duration is not None:
+                return duration
+
+    return None
 
 
 class GroqProvider(LLMProvider):
@@ -64,6 +122,12 @@ class GroqProvider(LLMProvider):
             "response_format": {"type": "json_object"},
         }
 
+        # Groq OpenAI API requires the word 'json' in messages when response_format is json_object
+        has_json_word = any("json" in m.get("content", "").lower() for m in messages)
+        if not has_json_word and messages:
+            # Append prompt hint to last user message or add system hint
+            messages[-1]["content"] += "\n(Return response in valid JSON format)"
+
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.post(
@@ -73,14 +137,18 @@ class GroqProvider(LLMProvider):
                 )
 
             if response.status_code == 429 or response.status_code >= 500:
+                retry_after_val = parse_retry_after_header(response.headers)
                 raise LLMProviderError(
                     f"Groq transient HTTP error {response.status_code}: {response.text}",
                     is_retryable=True,
+                    retry_after=retry_after_val,
+                    status_code=response.status_code,
                 )
             if response.status_code != 200:
                 raise LLMProviderError(
                     f"Groq permanent HTTP error {response.status_code}: {response.text}",
                     is_retryable=False,
+                    status_code=response.status_code,
                 )
 
             data = response.json()

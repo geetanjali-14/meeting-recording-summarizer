@@ -5,13 +5,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 ALLOWED_CONTENT_TYPES = {
     "audio/mpeg",
+    "audio/mp3",
     "audio/mp4",
     "audio/x-m4a",
     "audio/wav",
+    "audio/x-wav",
     "audio/webm",
     "audio/ogg",
     "video/mp4",
+    "video/quicktime",
     "video/webm",
+    "video/x-matroska",
 }
 
 MAX_FILE_SIZE_BYTES = 524_288_000  # 500 MB

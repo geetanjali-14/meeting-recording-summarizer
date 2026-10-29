@@ -137,6 +137,10 @@ class JobLeaseTracker:
         elif target_status == JobStatus.FAILED:
             job.error_code = error_code
             job.error_message = error_message
+        elif target_status in (JobStatus.PENDING, JobStatus.CANCELLED):
+            job.worker_id = None
+            job.error_code = error_code
+            job.error_message = error_message
 
         await self.session.flush()
         return job

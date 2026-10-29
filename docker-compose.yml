@@ -37,6 +37,8 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    env_file:
+      - ./backend/.env
     environment:
       - APP_NAME=Meeting Intelligence Summarizer
       - APP_ENV=development
@@ -46,10 +48,10 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=rpc://
-      - STORAGE_PROVIDER=mock
-      - LLM_PROVIDER=mock
-      - TRANSCRIPTION_PROVIDER=mock
-      - DIARIZATION_PROVIDER=mock
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-r2}
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
+      - TRANSCRIPTION_PROVIDER=${TRANSCRIPTION_PROVIDER:-groq_whisper_turbo}
+      - DIARIZATION_PROVIDER=${DIARIZATION_PROVIDER:-pyannote_community_1}
     depends_on:
       db:
         condition: service_healthy
@@ -62,6 +64,8 @@ services:
       dockerfile: Dockerfile.worker
     container_name: meeting-summarizer-worker
     restart: unless-stopped
+    env_file:
+      - ./backend/.env
     environment:
       - APP_NAME=Meeting Intelligence Summarizer
       - APP_ENV=development
@@ -69,30 +73,15 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=rpc://
-      - STORAGE_PROVIDER=mock
-      - LLM_PROVIDER=mock
-      - TRANSCRIPTION_PROVIDER=mock
-      - DIARIZATION_PROVIDER=mock
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-r2}
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
+      - TRANSCRIPTION_PROVIDER=${TRANSCRIPTION_PROVIDER:-groq_whisper_turbo}
+      - DIARIZATION_PROVIDER=${DIARIZATION_PROVIDER:-pyannote_community_1}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-      args:
-        - NEXT_PUBLIC_API_URL=http://localhost:8000
-    container_name: meeting-summarizer-frontend
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-    depends_on:
-      - api
 
 volumes:
   postgres_data:

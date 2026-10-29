@@ -93,6 +93,98 @@ class AudioService:
 
         return str(output_p)
 
+    def compress_to_mp3(
+        self,
+        input_path: str | Path,
+        output_path: str | Path,
+        bitrate: str = "64k",
+    ) -> str:
+        """Compresses audio to mono MP3 to drastically reduce payload size for Whisper API."""
+        input_p = Path(input_path)
+        output_p = Path(output_path)
+
+        cmd = [
+            self.ffmpeg_bin,
+            "-y",
+            "-i",
+            str(input_p),
+            "-vn",
+            "-acodec",
+            "libmp3lame",
+            "-b:a",
+            bitrate,
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            str(output_p),
+        ]
+        try:
+            subprocess.run(cmd, capture_output=True, check=True)
+        except subprocess.CalledProcessError as exc:
+            stderr = (
+                exc.stderr.decode("utf-8", errors="replace")
+                if isinstance(exc.stderr, bytes)
+                else str(exc.stderr)
+            )
+            raise AudioProcessingError(f"FFmpeg MP3 compression failed: {stderr}") from exc
+
+        if not output_p.exists() or output_p.stat().st_size == 0:
+            raise AudioProcessingError(
+                f"FFmpeg produced an empty or missing MP3 output: {output_p}"
+            )
+
+        return str(output_p)
+
+    def extract_audio_segment(
+        self,
+        input_path: str | Path,
+        output_path: str | Path,
+        start_seconds: float,
+        duration_seconds: float,
+        bitrate: str = "64k",
+    ) -> str:
+        """Extracts an audio chunk from start_seconds with given duration to MP3."""
+        input_p = Path(input_path)
+        output_p = Path(output_path)
+
+        cmd = [
+            self.ffmpeg_bin,
+            "-y",
+            "-ss",
+            f"{start_seconds:.3f}",
+            "-t",
+            f"{duration_seconds:.3f}",
+            "-i",
+            str(input_p),
+            "-vn",
+            "-acodec",
+            "libmp3lame",
+            "-b:a",
+            bitrate,
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            str(output_p),
+        ]
+        try:
+            subprocess.run(cmd, capture_output=True, check=True)
+        except subprocess.CalledProcessError as exc:
+            stderr = (
+                exc.stderr.decode("utf-8", errors="replace")
+                if isinstance(exc.stderr, bytes)
+                else str(exc.stderr)
+            )
+            raise AudioProcessingError(f"FFmpeg audio segment extraction failed: {stderr}") from exc
+
+        if not output_p.exists() or output_p.stat().st_size == 0:
+            raise AudioProcessingError(
+                f"FFmpeg produced an empty or missing segment output: {output_p}"
+            )
+
+        return str(output_p)
+
     @contextmanager
     def temporary_scratch_dir(self, prefix: str = "meeting_audio_") -> Generator[Path, None, None]:
         """Provides an isolated temporary scratch directory that is reliably deleted on exit."""
