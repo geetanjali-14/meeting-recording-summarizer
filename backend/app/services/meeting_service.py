@@ -91,20 +91,35 @@ class MeetingService:
         """Executes deletion lifecycle cascading across storage and database cleanly.
 
         1. Finds meeting and verifies ownership.
-        2. Transitions meeting status to DELETING.
-        3. Cleans up binary in object storage.
-        4. Permanently cascades deletion in PostgreSQL.
+        2. Transitions meeting status to DELETING (blocking worker pipeline & queries).
+        3. Attempts to revoke any active Celery task if job is running/pending.
+        4. Cleans up binary in object storage.
+        5. Permanently cascades deletion in PostgreSQL.
         """
         meeting = await self.meeting_repo.get_by_id(
             meeting_id=meeting_id,
             user_id=user_id,
             include_relations=True,
         )
-        if meeting is None or meeting.status in (MeetingStatus.DELETING, MeetingStatus.PURGED):
+        if meeting is None or meeting.status == MeetingStatus.PURGED:
             raise MeetingNotFoundError()
 
-        # Mark DELETING
-        await self.meeting_repo.mark_deleting(meeting_id=meeting_id, user_id=user_id)
+        # Mark DELETING if not already marked
+        if meeting.status != MeetingStatus.DELETING:
+            await self.meeting_repo.mark_deleting(meeting_id=meeting_id, user_id=user_id)
+
+        # Cancel/revoke Celery task if active or pending
+        if meeting.job is not None and meeting.job.celery_task_id:
+            try:
+                from app.core.celery_app import celery_app
+
+                celery_app.control.revoke(meeting.job.celery_task_id, terminate=True)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to revoke celery task %s during meeting deletion: %s",
+                    meeting.job.celery_task_id,
+                    exc,
+                )
 
         # Storage cleanup if recording exists
         if meeting.recording is not None and meeting.recording.storage_key:

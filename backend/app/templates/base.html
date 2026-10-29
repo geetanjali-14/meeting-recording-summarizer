@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Meeting Intelligence Summarizer{% endblock %}</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/css/styles.css">
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <!-- Header / Navbar -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <a href="/" class="brand-link">
+        <div class="brand-badge">M</div>
+        <span>Meeting Summarizer</span>
+      </a>
+
+      <nav class="nav-links">
+        <a href="/" class="nav-link {% if active_page == 'home' %}active{% endif %}">Home</a>
+        {% if current_user %}
+          <a href="/dashboard" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">Dashboard</a>
+          <a href="/meetings/new" class="btn btn-primary btn-sm">+ Upload</a>
+          <span style="font-size: 0.75rem; color: var(--slate-500); padding-left: 0.5rem; border-left: 1px solid var(--slate-200);">
+            {{ current_user.email or current_user.user_id|string }}
+          </span>
+          <form action="/auth/logout" method="POST" style="display: inline; margin: 0;">
+            <button type="submit" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem;">Sign out</button>
+          </form>
+        {% else %}
+          <a href="/login" class="btn btn-primary btn-sm">Sign In</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main style="flex: 1; padding-top: 2rem; padding-bottom: 3rem;">
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer style="border-top: 1px solid var(--slate-200); background-color: #ffffff; padding: 1.5rem 0; font-size: 0.75rem; color: var(--slate-500); text-align: center;">
+    <div class="container">
+      <p>Meeting Recording Summarizer • Fast, private transcription and structured intelligence.</p>
+    </div>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
+

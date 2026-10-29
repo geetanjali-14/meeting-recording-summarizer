@@ -1,0 +1,49 @@
+# [Unit Configuration]
+# Systemd service units for single-server deployment of Meeting Intelligence Summarizer
+# Install to /etc/systemd/system/
+#
+# Services:
+# 1. meeting-summarizer-web.service: FastAPI HTTP & Web UI process
+# 2. meeting-summarizer-worker.service: Celery background processing worker
+# ------------------------------------------------------------------------------
+
+# --- meeting-summarizer-web.service ---
+# [Unit]
+# Description=Meeting Intelligence Summarizer - FastAPI Web Application
+# After=network.target redis.service postgresql.service
+#
+# [Service]
+# Type=simple
+# User=meeting-app
+# Group=meeting-app
+# WorkingDirectory=/opt/meeting-summarizer/backend
+# EnvironmentFile=/opt/meeting-summarizer/.env
+# ExecStart=/opt/meeting-summarizer/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+# Restart=always
+# RestartSec=5s
+# LimitNOFILE=65535
+#
+# [Install]
+# WantedBy=multi-user.target
+
+
+# --- meeting-summarizer-worker.service ---
+# [Unit]
+# Description=Meeting Intelligence Summarizer - Celery Background Task Worker
+# After=network.target redis.service postgresql.service
+#
+# [Service]
+# Type=simple
+# User=meeting-app
+# Group=meeting-app
+# WorkingDirectory=/opt/meeting-summarizer/backend
+# EnvironmentFile=/opt/meeting-summarizer/.env
+# ExecStart=/opt/meeting-summarizer/backend/.venv/bin/celery -A app.core.celery_app worker --loglevel=INFO --concurrency=2 --prefetch-multiplier=1 -O fair
+# Restart=always
+# RestartSec=10s
+# TimeoutStopSec=120
+# KillSignal=SIGTERM
+#
+# [Install]
+# WantedBy=multi-user.target
+

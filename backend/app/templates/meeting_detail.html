@@ -1,0 +1,856 @@
+{% extends "base.html" %}
+
+{% block title %}{{ meeting.title }} - Meeting Intelligence{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem;">
+  <!-- Header Bar -->
+  <div style="display: flex; flex-direction: column; gap: 0.5rem; border-bottom: 1px solid var(--slate-200); padding-bottom: 1.5rem; margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <h1 style="font-size: 1.75rem; font-weight: 700; color: var(--slate-900);">{{ meeting.title }}</h1>
+          <span class="badge {% if meeting.status.value == 'ACTIVE' %}badge-active{% elif meeting.status.value == 'DELETING' %}badge-pending{% else %}badge-default{% endif %}">
+            {{ meeting.status.value }}
+          </span>
+        </div>
+        <p style="font-size: 0.875rem; color: var(--slate-500); margin-top: 0.25rem;">
+          Recorded on {{ meeting.meeting_date }}
+          {% if meeting.recording and meeting.recording.file_size_bytes %}
+            • {{ (meeting.recording.file_size_bytes / (1024*1024))|round(1) }} MB
+          {% endif %}
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        {% if is_completed %}
+          <button type="button" class="btn btn-secondary btn-sm" onclick="downloadSummary()">
+            📄 Download Summary
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="downloadTranscript()">
+            📝 Download Transcript
+          </button>
+        {% endif %}
+        <button type="button" class="btn btn-danger btn-sm" onclick="openDeleteModal()">
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Processing Status Card (Shown if not completed or if failed) -->
+  <div id="processing-card" class="card" style="margin-bottom: 1.5rem; {% if is_completed %}display: none;{% endif %}">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h3 style="font-size: 1rem; font-weight: 600; color: var(--slate-900); display: flex; align-items: center; gap: 0.5rem;">
+        <span id="pipeline-spinner" style="display: inline-block;">⚙️</span>
+        <span id="pipeline-title">
+          {% if is_failed %}Processing Failed{% else %}Processing Pipeline Active{% endif %}
+        </span>
+      </h3>
+      <span id="pipeline-elapsed" style="font-size: 0.75rem; font-family: monospace; color: var(--slate-500);">
+        Elapsed: <span id="elapsed-val">0</span>s
+      </span>
+    </div>
+
+    <!-- Stepper -->
+    <div id="stepper-container" style="display: flex; flex-direction: column; gap: 0.5rem;">
+      {% set stages = [
+        ('VALIDATING', '1. Validating', 'Checking file headers and integrity'),
+        ('EXTRACTING_AUDIO', '2. Extracting Audio', 'Demuxing and resampling audio stream'),
+        ('TRANSCRIBING', '3. Transcribing', 'Speech-to-text with Groq Whisper'),
+        ('DIARIZING', '4. Diarizing', 'Speaker separation with Pyannote'),
+        ('ANALYZING', '5. Analyzing', 'Extracting summary, decisions, action items'),
+        ('VERIFYING', '6. Verifying', 'Validating citations and hallucination guardrails'),
+        ('SAVING', '7. Finalizing', 'Persisting intelligence and transcripts')
+      ] %}
+
+      {% for stage_key, stage_label, stage_desc in stages %}
+        <div id="step-{{ stage_key }}" class="step-row" style="display: flex; align-items: center; padding: 0.75rem 1rem; border-radius: 0.5rem; background: var(--slate-50); border: 1px solid var(--slate-200); gap: 0.75rem;">
+          <div id="step-icon-{{ stage_key }}" style="width: 1.5rem; height: 1.5rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; background: var(--slate-200); color: var(--slate-600);">
+            {{ loop.index }}
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 0.875rem; font-weight: 600; color: var(--slate-800);">{{ stage_label }}</div>
+            <div style="font-size: 0.75rem; color: var(--slate-500);">{{ stage_desc }}</div>
+          </div>
+          <div id="step-badge-{{ stage_key }}" style="font-size: 0.75rem; font-weight: 500; color: var(--slate-400);">
+            Pending
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div id="pipeline-error" class="alert alert-error" style="display: {% if is_failed %}block{% else %}none{% endif %}; margin-top: 1rem; font-size: 0.8125rem;">
+      {% if is_failed %}{{ meeting.job.error_message or 'Processing failed. You can retry from the failed step or restart from the beginning.' }}{% endif %}
+    </div>
+
+    <!-- Retry & Restart Controls -->
+    <div id="pipeline-actions" style="margin-top: 1rem; display: {% if is_failed %}flex{% else %}none{% endif %}; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+      <button id="btn-retry-job" type="button" class="btn btn-primary btn-sm" onclick="retryProcessingJob()" style="display: inline-flex; align-items: center; gap: 0.375rem;">
+        <span>🔄</span> Retry Failed Step
+      </button>
+      <button id="btn-restart-job" type="button" class="btn btn-secondary btn-sm" onclick="confirmRestartJob()" style="display: inline-flex; align-items: center; gap: 0.375rem;">
+        <span>⏮️</span> Restart from Beginning
+      </button>
+      <span id="job-action-spinner" style="display: none; font-size: 0.8125rem; color: var(--slate-600); align-items: center; gap: 0.375rem;">
+        <span style="display: inline-block; animation: spin 1s linear infinite;">⏳</span> <span id="job-action-text">Retrying...</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- Completed Meeting Content: Speaker Mapper, Intelligence & Transcript -->
+  <div id="completed-content" style="{% if not is_completed %}display: none;{% endif %}">
+    <!-- Media Player Card (Audio or Video playback) -->
+    {% if recording_stream_url %}
+      <div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.25rem;">{% if is_video_recording %}🎬{% else %}🎧{% endif %}</span>
+            <div>
+              <h3 style="font-size: 0.875rem; font-weight: 700; color: var(--slate-900);">
+                {% if is_video_recording %}Meeting Video Recording{% else %}Meeting Audio Recording{% endif %}
+              </h3>
+              <p style="font-size: 0.75rem; color: var(--slate-500);">
+                Click any transcript line or citation badge to jump to that timestamp in the recording.
+              </p>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <label for="playback-speed" style="font-size: 0.75rem; font-weight: 600; color: var(--slate-600);">Speed:</label>
+            <select id="playback-speed" onchange="setPlaybackRate(this.value)" class="form-select" style="width: auto; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+              <option value="0.75">0.75x</option>
+              <option value="1.0" selected>1.0x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2.0">2.0x</option>
+            </select>
+            <a href="{{ recording_stream_url }}" download class="btn btn-secondary btn-sm" title="Download original file">
+              ⬇️ Download
+            </a>
+          </div>
+        </div>
+
+        {% if is_video_recording %}
+          <div style="background-color: #000000; border-radius: 0.5rem; overflow: hidden; display: flex; justify-content: center; max-height: 420px;">
+            <video
+              id="meeting-media-player"
+              controls
+              preload="metadata"
+              style="width: 100%; max-height: 420px; object-fit: contain;"
+              src="{{ recording_stream_url }}"
+            >
+              Your browser does not support HTML5 video streaming.
+            </video>
+          </div>
+        {% else %}
+          <div style="background-color: var(--slate-100); padding: 0.75rem 1rem; border-radius: 0.5rem;">
+            <audio
+              id="meeting-media-player"
+              controls
+              preload="metadata"
+              style="width: 100%; height: 40px;"
+              src="{{ recording_stream_url }}"
+            >
+              Your browser does not support HTML5 audio playback.
+            </audio>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <!-- Speaker Mapper -->
+    <div class="card" style="margin-bottom: 1.5rem; padding: 1rem 1.25rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h3 style="font-size: 0.875rem; font-weight: 700; color: var(--slate-900);">Speaker Assignment</h3>
+          <p style="font-size: 0.75rem; color: var(--slate-500);">Map detected voices to teammate names across transcript and evidence.</p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="toggleSpeakerEditor()">
+          Edit Speaker Names
+        </button>
+      </div>
+
+      <div id="speaker-pill-container" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem;">
+        <!-- Injected via JavaScript -->
+      </div>
+
+      <div id="speaker-editor" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--slate-200); grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">
+        <!-- Injected via JavaScript -->
+      </div>
+    </div>
+
+    <!-- Dual-Pane Layout: Intelligence (Left) & Transcript (Right) -->
+    <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 1.5rem; align-items: flex-start;">
+      <!-- Left Column: Intelligence Tabs & Chat -->
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+        <!-- Intelligence Card -->
+        <div class="card" style="padding: 0; overflow: hidden;">
+          <div style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--slate-200); background-color: #ffffff; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="font-size: 1rem; font-weight: 700; color: var(--slate-900);">Summary</h2>
+            {% if analysis %}
+              <span style="font-size: 0.6875rem; font-family: monospace; color: var(--slate-500); background: var(--slate-100); padding: 0.125rem 0.375rem; border-radius: 0.25rem;">
+                {{ analysis.model or 'Groq LLM' }}
+              </span>
+            {% endif %}
+          </div>
+
+          <div style="padding: 1.5rem; max-height: 520px; overflow-y: auto;">
+            <div id="pane-summary">
+              {% if analysis and analysis.executive_summary %}
+                <div class="markdown-body" style="font-size: 0.875rem; line-height: 1.7; color: var(--slate-800); background: var(--slate-50); padding: 1.25rem 1.5rem; border-radius: 0.5rem; border: 1px solid var(--slate-200);">
+                  {{ analysis.executive_summary | markdown | safe }}
+                </div>
+              {% else %}
+                <p style="font-size: 0.875rem; line-height: 1.7; color: var(--slate-500); background: var(--slate-50); padding: 1.25rem; border-radius: 0.5rem; border: 1px solid var(--slate-200);">
+                  Analysis pending or not available.
+                </p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Meeting Q&A Chat Card -->
+        <div class="card" style="padding: 0; overflow: hidden; display: flex; flex-direction: column; height: 420px;">
+          <div style="padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--slate-200); background: #ffffff;">
+            <h3 style="font-size: 0.875rem; font-weight: 700; color: var(--slate-900);">💬 Transcript Q&A</h3>
+            <p style="font-size: 0.75rem; color: var(--slate-500);">Ask questions strictly grounded in the meeting discussion.</p>
+          </div>
+
+          <div id="chat-messages" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+            <!-- Render existing messages or placeholder -->
+            {% if chat_messages %}
+              {% for msg in chat_messages %}
+                <div style="align-self: {% if msg.role.value == 'USER' %}flex-end{% else %}flex-start{% endif %}; max-width: 85%; padding: 0.625rem 0.875rem; border-radius: 0.75rem; font-size: 0.8125rem; {% if msg.role.value == 'USER' %}background: var(--primary); color: #ffffff;{% else %}background: var(--slate-100); color: var(--slate-800);{% endif %}">
+                  <p style="white-space: pre-wrap;">{{ msg.content }}</p>
+                </div>
+              {% endfor %}
+            {% else %}
+              <div style="text-align: center; color: var(--slate-400); font-size: 0.8125rem; margin: auto;">
+                Ask anything about what was decided or discussed!
+              </div>
+            {% endif %}
+          </div>
+
+          <form id="chat-form" onsubmit="handleSendChat(event)" style="padding: 0.75rem; border-top: 1px solid var(--slate-200); display: flex; gap: 0.5rem; background: var(--slate-50);">
+            <input id="chat-input" type="text" placeholder="Ask a question about this meeting..." class="form-input" style="padding: 0.375rem 0.75rem; font-size: 0.8125rem;">
+            <button type="submit" class="btn btn-primary btn-sm" style="padding: 0.375rem 0.75rem;">Ask →</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Right Column: Interactive Transcript -->
+      <div class="card" style="padding: 0; overflow: hidden; display: flex; flex-direction: column; height: 750px; position: sticky; top: 5rem;">
+        <div style="padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--slate-200); background: #ffffff; display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-size: 0.875rem; font-weight: 700; color: var(--slate-900);">
+            Transcript
+            <span style="font-size: 0.75rem; font-weight: 400; color: var(--slate-500);">
+              ({{ segments|length }} segments)
+            </span>
+          </h3>
+          <span style="font-size: 0.6875rem; color: var(--slate-400);">Click citation to jump</span>
+        </div>
+
+        <div id="transcript-scroll" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+          {% for seg in segments %}
+            <div
+              id="seg-{{ seg.id }}"
+              class="transcript-segment"
+              data-speaker="{{ seg.speaker_label or seg.speaker or 'SPEAKER_00' }}"
+              data-start="{{ seg.start_time }}"
+              data-end="{{ seg.end_time }}"
+              style="padding: 0.625rem; border-radius: 0.375rem; border: 1px solid transparent; transition: all 0.15s ease-in-out; cursor: pointer;"
+              onclick="highlightSegment('{{ seg.id }}')"
+            >
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <span class="speaker-tag" data-speaker="{{ seg.speaker_label or seg.speaker or 'SPEAKER_00' }}" style="font-size: 0.6875rem; font-weight: 700; padding: 0.125rem 0.375rem; border-radius: 0.25rem; background: var(--slate-200); color: var(--slate-800);">
+                  {{ seg.speaker or seg.speaker_label or 'Unknown' }}
+                </span>
+                <span style="font-size: 0.6875rem; font-family: monospace; color: var(--slate-400);">
+                  {{ (seg.start_time // 60)|int }}:{{ "%02d"|format((seg.start_time % 60)|int) }} – {{ (seg.end_time // 60)|int }}:{{ "%02d"|format((seg.end_time % 60)|int) }}
+                </span>
+              </div>
+              <p style="font-size: 0.8125rem; color: var(--slate-800); line-height: 1.5;">
+                {{ seg.text }}
+              </p>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="detail-delete-modal" class="modal-backdrop" style="display: none;">
+  <div class="modal-content">
+    <h3 style="font-size: 1.125rem; font-weight: 700; color: var(--slate-900); margin-bottom: 0.5rem;">Delete Recording</h3>
+    <p style="font-size: 0.875rem; color: var(--slate-600); line-height: 1.5;">
+      Are you sure you want to permanently delete <strong>"{{ meeting.title }}"</strong>?
+    </p>
+
+    <div class="alert alert-warning" style="margin-top: 1rem; margin-bottom: 1.5rem; font-size: 0.75rem;">
+      This action deletes the recording from object storage and removes all transcripts, speaker labels, and AI intelligence.
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button id="detail-delete-btn" type="button" class="btn btn-danger" onclick="executeDetailDelete()">
+        Yes, Delete Recording
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block head_extra %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const meetingId = "{{ meeting.id }}";
+  let isCompleted = {{ 'true' if is_completed else 'false' }};
+  let speakerMap = {};
+
+  // Initialize speaker mapping from localStorage
+  try {
+    const saved = localStorage.getItem(`speaker_map_${meetingId}`);
+    if (saved) {
+      speakerMap = JSON.parse(saved);
+    }
+  } catch(e) {}
+
+  function updateSpeakerDisplay() {
+    document.querySelectorAll(".speaker-tag").forEach(el => {
+      const code = el.getAttribute("data-speaker");
+      if (speakerMap[code]) {
+        el.textContent = speakerMap[code];
+      }
+    });
+
+    const pills = document.getElementById("speaker-pill-container");
+    if (!pills) return;
+    pills.innerHTML = "";
+
+    const detected = new Set();
+    document.querySelectorAll(".speaker-tag").forEach(el => detected.add(el.getAttribute("data-speaker")));
+
+    detected.forEach(spk => {
+      const name = speakerMap[spk] || spk;
+      const span = document.createElement("span");
+      span.className = "badge badge-default";
+      span.style.padding = "0.25rem 0.5rem";
+      const strong = document.createElement("strong");
+      strong.textContent = name;
+      span.appendChild(strong);
+      if (speakerMap[spk]) {
+        const sub = document.createElement("span");
+        sub.style.opacity = "0.6";
+        sub.style.marginLeft = "0.25rem";
+        sub.textContent = `(${spk})`;
+        span.appendChild(sub);
+      }
+      pills.appendChild(span);
+    });
+  }
+
+  function toggleSpeakerEditor() {
+    const editor = document.getElementById("speaker-editor");
+    if (editor.style.display === "none" || !editor.style.display) {
+      editor.style.display = "grid";
+      editor.innerHTML = "";
+
+      const detected = new Set();
+      document.querySelectorAll(".speaker-tag").forEach(el => detected.add(el.getAttribute("data-speaker")));
+
+      detected.forEach(spk => {
+        const div = document.createElement("div");
+        div.style.display = "flex";
+        div.style.alignItems = "center";
+        div.style.gap = "0.5rem";
+
+        const label = document.createElement("span");
+        label.style.cssText = "font-size: 0.75rem; font-family: monospace; font-weight: 700; width: 5.5rem;";
+        label.textContent = spk;
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = speakerMap[spk] || "";
+        input.placeholder = "Enter name...";
+        input.className = "form-input";
+        input.style.cssText = "padding: 0.25rem 0.5rem; font-size: 0.75rem;";
+        input.onchange = function() { saveSpeakerName(spk, this.value); };
+
+        div.appendChild(label);
+        div.appendChild(input);
+        editor.appendChild(div);
+      });
+    } else {
+      editor.style.display = "none";
+    }
+  }
+
+  function saveSpeakerName(code, val) {
+    if (val && val.trim()) {
+      speakerMap[code] = val.trim();
+    } else {
+      delete speakerMap[code];
+    }
+    localStorage.setItem(`speaker_map_${meetingId}`, JSON.stringify(speakerMap));
+    updateSpeakerDisplay();
+  }
+
+  updateSpeakerDisplay();
+
+  // Playback speed control
+  function setPlaybackRate(rate) {
+    const player = document.getElementById("meeting-media-player");
+    if (player) {
+      player.playbackRate = parseFloat(rate);
+    }
+  }
+
+  // Segment highlighting & Media Player Seek
+  function highlightSegment(segmentId) {
+    document.querySelectorAll(".transcript-segment").forEach(el => el.classList.remove("active-citation"));
+    const target = document.getElementById(`seg-${segmentId}`);
+    if (target) {
+      target.classList.add("active-citation");
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      // Seek media player to timestamp
+      const startTime = parseFloat(target.getAttribute("data-start"));
+      const player = document.getElementById("meeting-media-player");
+      if (player && !isNaN(startTime)) {
+        player.currentTime = startTime;
+        if (player.paused) {
+          player.play().catch(() => {});
+        }
+      }
+    }
+  }
+
+  // Live active segment highlighting as media plays
+  const mediaPlayer = document.getElementById("meeting-media-player");
+  if (mediaPlayer) {
+    mediaPlayer.addEventListener("timeupdate", () => {
+      const cur = mediaPlayer.currentTime;
+      const segments = document.querySelectorAll(".transcript-segment");
+      segments.forEach(seg => {
+        const start = parseFloat(seg.getAttribute("data-start"));
+        const end = parseFloat(seg.getAttribute("data-end"));
+        if (!isNaN(start) && !isNaN(end) && cur >= start && cur <= end) {
+          seg.style.backgroundColor = "var(--primary-light)";
+          seg.style.borderColor = "var(--primary-border)";
+        } else if (!seg.classList.contains("active-citation")) {
+          seg.style.backgroundColor = "transparent";
+          seg.style.borderColor = "transparent";
+        }
+      });
+    });
+  }
+
+  // Download Meeting Intelligence Summary (.md)
+  async function downloadSummary() {
+    try {
+      const res = await fetch(`/api/v1/meetings/${meetingId}/exports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: "markdown" })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        triggerDownload(data.data.filename || "meeting_summary.md", data.data.content, "text/markdown");
+        return;
+      }
+      const errData = await res.json().catch(() => null);
+      const errMsg = errData?.error?.message || `Server responded with ${res.status}`;
+      console.warn("Backend export API error:", errMsg, "- generating export from current view.");
+      generateClientSideSummary();
+    } catch (err) {
+      console.warn("Export network/server error:", err.message, "- generating export from current view.");
+      // Fallback: Generate summary directly from page data
+      generateClientSideSummary();
+    }
+  }
+
+  // Download Transcript (.txt) with mapped speaker names and timestamps
+  function downloadTranscript() {
+    const segments = document.querySelectorAll(".transcript-segment");
+    if (!segments || segments.length === 0) {
+      alert("No transcript segments available to download.");
+      return;
+    }
+
+    const meetingTitle = {{ (meeting.title or 'Meeting')|tojson }};
+    const meetingDate = {{ (meeting.meeting_date|string or 'N/A')|tojson }};
+
+    let textContent = `${meetingTitle} - Transcript\nDate: ${meetingDate}\n${'='.repeat(50)}\n\n`;
+
+    segments.forEach(seg => {
+      const speakerEl = seg.querySelector(".speaker-tag");
+      const speaker = speakerEl ? speakerEl.textContent.trim() : "Speaker";
+      const timeEl = seg.querySelector("span[style*='font-family: monospace']");
+      const timestamp = timeEl ? timeEl.textContent.trim() : "";
+      const textP = seg.querySelector("p");
+      const text = textP ? textP.textContent.trim() : "";
+
+      textContent += `[${timestamp}] ${speaker}:\n${text}\n\n`;
+    });
+
+    const safeTitle = meetingTitle.replace(/[^a-zA-Z0-9_-]/g, "_");
+    triggerDownload(`${safeTitle}_transcript.txt`, textContent, "text/plain;charset=utf-8");
+  }
+
+  function generateClientSideSummary() {
+    const meetingTitle = {{ (meeting.title or 'Meeting')|tojson }};
+    const meetingDate = {{ (meeting.meeting_date|string or 'N/A')|tojson }};
+    const summaryText = document.querySelector("#pane-summary p")?.textContent?.trim() || "";
+
+    let md = `# ${meetingTitle}\n- **Date:** ${meetingDate}\n\n## Summary\n\n${summaryText}\n`;
+
+    const safeTitle = meetingTitle.replace(/[^a-zA-Z0-9_-]/g, "_");
+    triggerDownload(`${safeTitle}_summary.md`, md, "text/markdown;charset=utf-8");
+  }
+
+  function triggerDownload(filename, content, mimeType) {
+    try {
+      const encodedData = encodeURIComponent(content);
+      const dataUri = `data:${mimeType},${encodedData}`;
+      const a = document.createElement("a");
+      a.href = dataUri;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  }
+
+  // Delete modal
+  function openDeleteModal() {
+    document.getElementById("detail-delete-modal").style.display = "flex";
+  }
+  function closeDeleteModal() {
+    document.getElementById("detail-delete-modal").style.display = "none";
+  }
+  async function executeDetailDelete() {
+    const btn = document.getElementById("detail-delete-btn");
+    btn.disabled = true;
+    btn.textContent = "Deleting...";
+    try {
+      const res = await fetch(`/api/v1/meetings/${meetingId}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error("Failed to delete meeting");
+      window.location.href = "/dashboard";
+    } catch(err) {
+      alert("Deletion failed: " + err.message);
+      btn.disabled = false;
+      btn.textContent = "Yes, Delete Recording";
+    }
+  }
+
+  // Conversational Chat Q&A
+  async function handleSendChat(e) {
+    e.preventDefault();
+    const input = document.getElementById("chat-input");
+    const question = input.value.trim();
+    if (!question) return;
+
+    input.value = "";
+    const chatContainer = document.getElementById("chat-messages");
+
+    // Optimistic user message
+    const userMsg = document.createElement("div");
+    userMsg.style.cssText = "align-self: flex-end; max-width: 85%; padding: 0.625rem 0.875rem; border-radius: 0.75rem; font-size: 0.8125rem; background: var(--primary); color: #ffffff;";
+    const userP = document.createElement("p");
+    userP.textContent = question;
+    userMsg.appendChild(userP);
+    chatContainer.appendChild(userMsg);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    const loadingMsg = document.createElement("div");
+    loadingMsg.style.cssText = "align-self: flex-start; max-width: 85%; padding: 0.625rem 0.875rem; border-radius: 0.75rem; font-size: 0.8125rem; background: var(--slate-100); color: var(--slate-500);";
+    const loadingEm = document.createElement("em");
+    loadingEm.textContent = "Thinking & searching transcript...";
+    loadingMsg.appendChild(loadingEm);
+    chatContainer.appendChild(loadingMsg);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    try {
+      const res = await fetch(`/api/v1/meetings/${meetingId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: question })
+      });
+      const data = await res.json();
+      loadingMsg.remove();
+
+      if (!res.ok) throw new Error(data.error?.message || "Chat request failed");
+
+      const botMsg = document.createElement("div");
+      botMsg.style.cssText = "align-self: flex-start; max-width: 85%; padding: 0.625rem 0.875rem; border-radius: 0.75rem; font-size: 0.8125rem; background: var(--slate-100); color: var(--slate-800);";
+
+      const botP = document.createElement("p");
+      botP.style.whiteSpace = "pre-wrap";
+      botP.textContent = data.data.message ? data.data.message.content : "";
+      botMsg.appendChild(botP);
+
+      if (data.data.message && data.data.message.citations && data.data.message.citations.length > 0) {
+        const citeWrapper = document.createElement("div");
+        citeWrapper.style.cssText = "margin-top: 0.5rem; padding-top: 0.25rem; border-top: 1px solid var(--slate-200); display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap;";
+        const citeLabel = document.createElement("span");
+        citeLabel.style.cssText = "font-size: 0.6875rem; font-weight: 600; color: var(--slate-400);";
+        citeLabel.textContent = "Citations:";
+        citeWrapper.appendChild(citeLabel);
+
+        data.data.message.citations.forEach(c => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "citation-btn";
+          btn.textContent = `#${c.segment_id.slice(0, 8)}`;
+          btn.onclick = () => highlightSegment(c.segment_id);
+          citeWrapper.appendChild(btn);
+        });
+        botMsg.appendChild(citeWrapper);
+      }
+
+      chatContainer.appendChild(botMsg);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    } catch(err) {
+      loadingMsg.replaceChildren();
+      const errSpan = document.createElement("span");
+      errSpan.style.color = "var(--red-600)";
+      errSpan.textContent = err.message || "Chat request failed";
+      loadingMsg.appendChild(errSpan);
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // Server-Sent Events (SSE) status stream & Pipeline Controls
+  let eventSource = null;
+  let elapsedTimer = null;
+  let elapsed = 0;
+  const stagesOrder = ['VALIDATING', 'EXTRACTING_AUDIO', 'TRANSCRIBING', 'DIARIZING', 'ANALYZING', 'VERIFYING', 'SAVING'];
+
+  function updateStageUI(currentStage) {
+    const curIdx = stagesOrder.indexOf(currentStage);
+    stagesOrder.forEach((st, idx) => {
+      const row = document.getElementById(`step-${st}`);
+      const icon = document.getElementById(`step-icon-${st}`);
+      const badge = document.getElementById(`step-badge-${st}`);
+      if (!row || !icon || !badge) return;
+
+      if (idx < curIdx) {
+        icon.style.background = "var(--emerald-100)";
+        icon.style.color = "var(--emerald-800)";
+        icon.textContent = "✓";
+        badge.textContent = "Done";
+        badge.style.color = "var(--emerald-700)";
+        row.style.borderColor = "var(--slate-200)";
+        row.style.background = "var(--slate-50)";
+      } else if (idx === curIdx) {
+        icon.style.background = "var(--primary)";
+        icon.style.color = "#ffffff";
+        icon.textContent = "●";
+        badge.textContent = "In progress...";
+        badge.style.color = "var(--primary)";
+        row.style.borderColor = "var(--primary-border)";
+        row.style.background = "var(--primary-light)";
+      } else {
+        icon.style.background = "var(--slate-200)";
+        icon.style.color = "var(--slate-600)";
+        icon.textContent = idx + 1;
+        badge.textContent = "Pending";
+        badge.style.color = "var(--slate-400)";
+        row.style.borderColor = "var(--slate-200)";
+        row.style.background = "var(--slate-50)";
+      }
+    });
+  }
+
+  function resetAllStagesUI() {
+    stagesOrder.forEach((st, idx) => {
+      const row = document.getElementById(`step-${st}`);
+      const icon = document.getElementById(`step-icon-${st}`);
+      const badge = document.getElementById(`step-badge-${st}`);
+      if (!row || !icon || !badge) return;
+      icon.style.background = "var(--slate-200)";
+      icon.style.color = "var(--slate-600)";
+      icon.textContent = idx + 1;
+      badge.textContent = "Pending";
+      badge.style.color = "var(--slate-400)";
+      row.style.borderColor = "var(--slate-200)";
+      row.style.background = "var(--slate-50)";
+    });
+  }
+
+  function connectSSE() {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+    if (elapsedTimer) {
+      clearInterval(elapsedTimer);
+      elapsedTimer = null;
+    }
+
+    const elapsedVal = document.getElementById("elapsed-val");
+    elapsedTimer = setInterval(() => {
+      elapsed += 1;
+      if (elapsedVal) elapsedVal.textContent = elapsed;
+    }, 1000);
+
+    eventSource = new EventSource(`/api/v1/meetings/${meetingId}/events`);
+
+    eventSource.addEventListener("status", (evt) => {
+      try {
+        const payload = JSON.parse(evt.data);
+        if (payload.stage) {
+          updateStageUI(payload.stage);
+        }
+        if (payload.status === "COMPLETED") {
+          clearInterval(elapsedTimer);
+          eventSource.close();
+          window.location.reload();
+        } else if (payload.status === "FAILED" || payload.status === "CANCELLED") {
+          clearInterval(elapsedTimer);
+          eventSource.close();
+          const errEl = document.getElementById("pipeline-error");
+          errEl.textContent = `Processing failed: ${payload.error_message || 'An unexpected pipeline error occurred.'}`;
+          errEl.style.display = "block";
+          document.getElementById("pipeline-title").textContent = "Processing Failed";
+
+          // Show action buttons
+          const actionsEl = document.getElementById("pipeline-actions");
+          if (actionsEl) actionsEl.style.display = "flex";
+          const retryBtn = document.getElementById("btn-retry-job");
+          const restartBtn = document.getElementById("btn-restart-job");
+          if (retryBtn) retryBtn.disabled = false;
+          if (restartBtn) restartBtn.disabled = false;
+          const spinner = document.getElementById("job-action-spinner");
+          if (spinner) spinner.style.display = "none";
+        }
+      } catch(e) {}
+    });
+
+    eventSource.addEventListener("done", () => {
+      clearInterval(elapsedTimer);
+      eventSource.close();
+      window.location.reload();
+    });
+
+    eventSource.onerror = () => {
+      // Automatic browser SSE reconnection handles transient network drops
+    };
+  }
+
+  async function retryProcessingJob() {
+    const retryBtn = document.getElementById("btn-retry-job");
+    const restartBtn = document.getElementById("btn-restart-job");
+    const spinner = document.getElementById("job-action-spinner");
+    const spinnerText = document.getElementById("job-action-text");
+    const errEl = document.getElementById("pipeline-error");
+
+    if (retryBtn) retryBtn.disabled = true;
+    if (restartBtn) restartBtn.disabled = true;
+    if (spinner) spinner.style.display = "inline-flex";
+    if (spinnerText) spinnerText.textContent = "Retrying failed step...";
+
+    try {
+      const res = await fetch(`/api/v1/meetings/${meetingId}/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "Failed to retry processing job");
+      }
+
+      // Success: Hide error and action controls, update title, connect SSE stream
+      if (errEl) errEl.style.display = "none";
+      const actionsEl = document.getElementById("pipeline-actions");
+      if (actionsEl) actionsEl.style.display = "none";
+      document.getElementById("pipeline-title").textContent = "Processing Pipeline Active";
+
+      connectSSE();
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = `Retry request failed: ${err.message}`;
+        errEl.style.display = "block";
+      }
+      if (retryBtn) retryBtn.disabled = false;
+      if (restartBtn) restartBtn.disabled = false;
+      if (spinner) spinner.style.display = "none";
+    }
+  }
+
+  async function confirmRestartJob() {
+    const confirmed = window.confirm(
+      "Are you sure you want to restart processing from the beginning?\n\nThis will reprocess the original recording file and replace any previously generated transcripts or summaries."
+    );
+    if (!confirmed) return;
+
+    const retryBtn = document.getElementById("btn-retry-job");
+    const restartBtn = document.getElementById("btn-restart-job");
+    const spinner = document.getElementById("job-action-spinner");
+    const spinnerText = document.getElementById("job-action-text");
+    const errEl = document.getElementById("pipeline-error");
+
+    if (retryBtn) retryBtn.disabled = true;
+    if (restartBtn) restartBtn.disabled = true;
+    if (spinner) spinner.style.display = "inline-flex";
+    if (spinnerText) spinnerText.textContent = "Restarting from beginning...";
+
+    try {
+      const res = await fetch(`/api/v1/meetings/${meetingId}/restart`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "Failed to restart processing job");
+      }
+
+      // Success: Reset elapsed timer and stages UI, hide error/actions, connect SSE
+      elapsed = 0;
+      const elapsedVal = document.getElementById("elapsed-val");
+      if (elapsedVal) elapsedVal.textContent = "0";
+      resetAllStagesUI();
+
+      if (errEl) errEl.style.display = "none";
+      const actionsEl = document.getElementById("pipeline-actions");
+      if (actionsEl) actionsEl.style.display = "none";
+      document.getElementById("pipeline-title").textContent = "Processing Pipeline Active";
+
+      connectSSE();
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = `Restart request failed: ${err.message}`;
+        errEl.style.display = "block";
+      }
+      if (retryBtn) retryBtn.disabled = false;
+      if (restartBtn) restartBtn.disabled = false;
+      if (spinner) spinner.style.display = "none";
+    }
+  }
+
+  // Server-Sent Events (SSE) status stream if not completed
+  if (!isCompleted) {
+    connectSSE();
+  }
+</script>
+{% endblock %}
+

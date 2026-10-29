@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Turn Meeting Recordings into Actionable Intelligence{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto; padding: 2rem 0; text-align: center;">
+  <h1 style="font-size: 2.75rem; font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; color: var(--slate-900);">
+    Turn Meeting Recordings into <br>
+    <span style="color: var(--primary);">Actionable Intelligence</span>
+  </h1>
+
+  <p style="font-size: 1.125rem; color: var(--slate-600); max-width: 650px; margin: 1.5rem auto 2.5rem; line-height: 1.6;">
+    Asynchronous transcription, speaker diarization, and hallucination-free structured meeting intelligence powered by Groq Whisper and LLM verification.
+  </p>
+
+  <div style="display: flex; justify-content: center; gap: 1rem; margin-bottom: 4rem;">
+    {% if current_user %}
+      <a href="/meetings/new" class="btn btn-primary" style="padding: 0.75rem 1.5rem; font-size: 1rem;">Upload Meeting</a>
+      <a href="/dashboard" class="btn btn-secondary" style="padding: 0.75rem 1.5rem; font-size: 1rem;">View Dashboard</a>
+    {% else %}
+      <a href="/login" class="btn btn-primary" style="padding: 0.75rem 1.5rem; font-size: 1rem;">Sign in to Get Started</a>
+      <a href="/login" class="btn btn-secondary" style="padding: 0.75rem 1.5rem; font-size: 1rem;">View Demo</a>
+    {% endif %}
+  </div>
+
+  <!-- Features Grid -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; text-align: left;">
+    <div class="card">
+      <div style="font-size: 2rem; margin-bottom: 0.75rem;">🎙️</div>
+      <h2 style="font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--slate-900);">Direct Cloud Uploads</h2>
+      <p style="font-size: 0.875rem; color: var(--slate-600); line-height: 1.5;">
+        Recordings stream directly to private Cloudflare R2 storage using pre-signed URLs. Zero API server memory bottlenecks.
+      </p>
+    </div>
+
+    <div class="card">
+      <div style="font-size: 2rem; margin-bottom: 0.75rem;">👥</div>
+      <h2 style="font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--slate-900);">Speaker Diarization</h2>
+      <p style="font-size: 0.875rem; color: var(--slate-600); line-height: 1.5;">
+        Speaker separation with Pyannote. Easily assign and map detected speaker voices to your teammates' names.
+      </p>
+    </div>
+
+    <div class="card">
+      <div style="font-size: 2rem; margin-bottom: 0.75rem;">🔍</div>
+      <h2 style="font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--slate-900);">Evidence Grounding</h2>
+      <p style="font-size: 0.875rem; color: var(--slate-600); line-height: 1.5;">
+        Every extracted decision, action item, and risk includes direct citation links that jump straight to the exact transcript timestamps.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

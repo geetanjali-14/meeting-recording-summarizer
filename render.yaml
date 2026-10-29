@@ -2,8 +2,7 @@
 # Render Blueprint Specification (render.yaml)
 # Project: Meeting Intelligence Summarizer
 # Architecture:
-#   - Frontend Web Service (Next.js 14 Docker container)
-#   - Backend Web Service (FastAPI Docker container)
+#   - Python Web Service (FastAPI + Jinja2 + Static Assets Docker container)
 #   - Background Processing Worker (Celery + FFmpeg Docker container)
 #   - Task Broker / Key Value (Valkey / Redis 7 compatible)
 # ==============================================================================
@@ -20,7 +19,7 @@ services:
     maxmemoryPolicy: noeviction # Recommended for job task queues to prevent task dropping
 
   # ----------------------------------------------------------------------------
-  # 2. HTTP REST API Web Service: FastAPI Server
+  # 2. HTTP Web & REST API Service: FastAPI Server (Python-Served Web UI)
   # ----------------------------------------------------------------------------
   - type: web
     name: meeting-recording-summarizer
@@ -51,10 +50,6 @@ services:
           property: connectionString
       - key: CELERY_RESULT_BACKEND
         value: "rpc://"
-      # Allowed frontend origins for CORS
-      # Set to frontend service production HTTPS URL (e.g., https://meeting-summarizer-frontend.onrender.com)
-      - key: CORS_ORIGINS
-        sync: false
 
   # ----------------------------------------------------------------------------
   # 3. Background Processing Worker: Celery Task Worker
@@ -81,31 +76,6 @@ services:
           property: connectionString
       - key: CELERY_RESULT_BACKEND
         value: "rpc://"
-
-  # ----------------------------------------------------------------------------
-  # 4. Frontend Web Service: Next.js 14 Client & Server
-  # ----------------------------------------------------------------------------
-  - type: web
-    name: meeting-summarizer-frontend
-    runtime: docker
-    dockerfilePath: ./Dockerfile.frontend
-    dockerContext: .
-    plan: starter
-    region: oregon
-    envVars:
-      - key: NODE_ENV
-        value: "production"
-      - key: PORT
-        value: "3000"
-      # Build-time and runtime API base URL for client & server components
-      # Render passes service envVars as Docker build args during image build.
-      # Set to the backend API HTTPS URL (e.g. https://meeting-summarizer-api.onrender.com)
-      - key: NEXT_PUBLIC_API_URL
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
-        sync: false
 
 # ==============================================================================
 # Shared Environment Variables & Secrets

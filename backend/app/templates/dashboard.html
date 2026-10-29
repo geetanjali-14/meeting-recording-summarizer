@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Meeting Intelligence Summarizer{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem; display: flex; flex-direction: column; gap: 1rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--slate-200); padding-bottom: 1.5rem;">
+    <div>
+      <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--slate-900);">Meetings Dashboard</h1>
+      <p style="font-size: 0.875rem; color: var(--slate-600); margin-top: 0.25rem;">
+        Review meeting recordings, monitor processing pipelines, and explore AI summaries.
+      </p>
+    </div>
+    <div>
+      <a href="/meetings/new" class="btn btn-primary">+ Upload Recording</a>
+    </div>
+  </div>
+
+  <!-- Flash/Feedback messages -->
+  {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+  <div id="feedback-alert" class="alert alert-success" style="display: none;"></div>
+
+  <!-- Meetings Table or Empty State -->
+  {% if not meetings %}
+    <div class="card" style="text-align: center; padding: 4rem 2rem;">
+      <div style="font-size: 3rem; margin-bottom: 1rem;">📁</div>
+      <h3 style="font-size: 1.125rem; font-weight: 600; color: var(--slate-800); margin-bottom: 0.5rem;">No meeting recordings found</h3>
+      <p style="font-size: 0.875rem; color: var(--slate-500); max-width: 400px; margin: 0 auto 1.5rem;">
+        Get started by uploading an audio or video recording. The pipeline will transcribe and extract meeting intelligence.
+      </p>
+      <a href="/meetings/new" class="btn btn-primary">+ Upload First Recording</a>
+    </div>
+  {% else %}
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Meeting Date</th>
+            <th>Status</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="meetings-tbody">
+          {% for meeting in meetings %}
+            <tr id="row-{{ meeting.id }}">
+              <td>
+                <a href="/meetings/{{ meeting.id }}" style="font-weight: 600; color: var(--primary);">
+                  {{ meeting.title }}
+                </a>
+              </td>
+              <td>{{ meeting.meeting_date }}</td>
+              <td>
+                {% if meeting.status.value == 'ACTIVE' %}
+                  <span class="badge badge-active">ACTIVE</span>
+                {% elif meeting.status.value == 'DELETING' %}
+                  <span class="badge badge-pending">DELETING</span>
+                {% else %}
+                  <span class="badge badge-default">{{ meeting.status.value }}</span>
+                {% endif %}
+              </td>
+              <td style="text-align: right;">
+                <a href="/meetings/{{ meeting.id }}" class="btn btn-secondary btn-sm" style="margin-right: 0.5rem;">View →</a>
+                <button
+                  type="button"
+                  class="btn btn-danger btn-sm"
+                  onclick="openDeleteModal('{{ meeting.id }}', '{{ meeting.title|replace('\'', '\\\'') }}')"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="modal-backdrop" style="display: none;">
+  <div class="modal-content">
+    <h3 style="font-size: 1.125rem; font-weight: 700; color: var(--slate-900); margin-bottom: 0.5rem;">Delete Recording</h3>
+    <p style="font-size: 0.875rem; color: var(--slate-600); line-height: 1.5;">
+      Are you sure you want to permanently delete <strong id="delete-target-title">this meeting</strong>?
+    </p>
+
+    <div class="alert alert-warning" style="margin-top: 1rem; margin-bottom: 1.5rem; font-size: 0.75rem;">
+      This will stop any running background processing, remove the recording file from object storage, and permanently delete transcripts and AI summaries.
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button id="confirm-delete-btn" type="button" class="btn btn-danger" onclick="executeDelete()">
+        Yes, Delete Recording
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let targetMeetingId = null;
+
+  function openDeleteModal(meetingId, title) {
+    targetMeetingId = meetingId;
+    document.getElementById("delete-target-title").textContent = `"${title}"`;
+    document.getElementById("delete-modal").style.display = "flex";
+  }
+
+  function closeDeleteModal() {
+    targetMeetingId = null;
+    document.getElementById("delete-modal").style.display = "none";
+  }
+
+  async function executeDelete() {
+    if (!targetMeetingId) return;
+    const btn = document.getElementById("confirm-delete-btn");
+    btn.disabled = true;
+    btn.textContent = "Deleting...";
+
+    try {
+      const response = await fetch(`/api/v1/meetings/${targetMeetingId}`, {
+        method: "DELETE"
+      });
+
+      if (!response.ok && response.status !== 204) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error?.message || "Failed to delete meeting");
+      }
+
+      // Remove row from DOM
+      const row = document.getElementById(`row-${targetMeetingId}`);
+      if (row) row.remove();
+
+      closeDeleteModal();
+
+      const fb = document.getElementById("feedback-alert");
+      fb.textContent = "Meeting recording deleted successfully.";
+      fb.style.display = "block";
+      setTimeout(() => { fb.style.display = "none"; }, 5000);
+    } catch (err) {
+      alert("Error deleting meeting: " + (err.message || "Unknown error"));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Yes, Delete Recording";
+    }
+  }
+</script>
+{% endblock %}
+

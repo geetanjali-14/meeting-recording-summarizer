@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In - Meeting Intelligence Summarizer{% endblock %}
+
+{% block content %}
+<div style="min-height: 60vh; display: flex; align-items: center; justify-content: center;">
+  <div class="card" style="max-width: 420px; width: 100%; padding: 2rem;">
+    <div style="text-align: center; margin-bottom: 1.5rem;">
+      <div class="brand-badge" style="width: 2.75rem; height: 2.75rem; margin: 0 auto 0.75rem; font-size: 1.25rem;">M</div>
+      <h1 id="auth-title" style="font-size: 1.375rem; font-weight: 700; color: var(--slate-900);">Sign in to your account</h1>
+      <p id="auth-subtitle" style="font-size: 0.8125rem; color: var(--slate-600); margin-top: 0.25rem;">
+        Passwordless sign-in with a one-time verification code.
+      </p>
+    </div>
+
+    <!-- Feedback messages -->
+    <div id="auth-alert" class="alert alert-error" style="display: none; font-size: 0.8125rem;"></div>
+    <div id="auth-info" class="alert alert-success" style="display: none; font-size: 0.8125rem;"></div>
+
+    <!-- Step 1: Request OTP -->
+    <form id="email-form" onsubmit="handleSendOtp(event)">
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <label for="user-email" class="form-label">Email Address</label>
+        <input
+          id="user-email"
+          type="email"
+          required
+          placeholder="name@company.com"
+          class="form-input"
+          autocomplete="email"
+        >
+      </div>
+
+      <button id="send-btn" type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-size: 0.875rem;">
+        Send verification code
+      </button>
+    </form>
+
+    <!-- Step 2: Verify OTP -->
+    <form id="otp-form" onsubmit="handleVerifyOtp(event)" style="display: none;">
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <label for="otp-code" class="form-label" style="margin-bottom: 0;">Verification Code</label>
+          <button type="button" onclick="switchToEmailStep()" style="background: none; border: none; color: var(--primary); font-size: 0.75rem; cursor: pointer; text-decoration: underline;">
+            Change email
+          </button>
+        </div>
+        <input
+          id="otp-code"
+          type="text"
+          required
+          maxlength="8"
+          placeholder="123456"
+          class="form-input"
+          style="text-align: center; font-size: 1.25rem; letter-spacing: 0.25em; font-family: monospace; padding: 0.625rem 0.75rem;"
+          autocomplete="one-time-code"
+        >
+      </div>
+
+      <button id="verify-btn" type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-size: 0.875rem;">
+        Verify and continue
+      </button>
+
+      <div style="text-align: center; margin-top: 1.25rem;">
+        <span id="cooldown-text" style="font-size: 0.75rem; color: var(--slate-500); display: none;"></span>
+        <button id="resend-btn" type="button" onclick="handleSendOtp()" style="background: none; border: none; color: var(--primary); font-size: 0.75rem; cursor: pointer; text-decoration: underline;">
+          Didn't receive a code? Resend code
+        </button>
+      </div>
+    </form>
+
+    <p style="font-size: 0.75rem; color: var(--slate-500); text-align: center; margin-top: 1.5rem; line-height: 1.4;">
+      No password needed. New accounts are created automatically upon verification.
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const supabaseUrl = "{{ supabase_url or '' }}";
+  const supabaseAnonKey = "{{ supabase_anon_key or '' }}";
+
+  let savedEmail = "";
+  let cooldownTimer = null;
+  let cooldownSecs = 0;
+
+  function showAlert(msg) {
+    const el = document.getElementById("auth-alert");
+    el.textContent = msg;
+    el.style.display = "block";
+    document.getElementById("auth-info").style.display = "none";
+  }
+
+  function showInfo(msg) {
+    const el = document.getElementById("auth-info");
+    el.textContent = msg;
+    el.style.display = "block";
+    document.getElementById("auth-alert").style.display = "none";
+  }
+
+  function clearMessages() {
+    document.getElementById("auth-alert").style.display = "none";
+    document.getElementById("auth-info").style.display = "none";
+  }
+
+  function startCooldown(seconds) {
+    cooldownSecs = seconds;
+    const cooldownEl = document.getElementById("cooldown-text");
+    const resendBtn = document.getElementById("resend-btn");
+    resendBtn.style.display = "none";
+    cooldownEl.style.display = "inline";
+
+    if (cooldownTimer) clearInterval(cooldownTimer);
+    cooldownTimer = setInterval(() => {
+      cooldownSecs -= 1;
+      if (cooldownSecs <= 0) {
+        clearInterval(cooldownTimer);
+        cooldownEl.style.display = "none";
+        resendBtn.style.display = "inline";
+      } else {
+        cooldownEl.textContent = `Resend code in ${cooldownSecs}s`;
+      }
+    }, 1000);
+  }
+
+  function switchToEmailStep() {
+    clearMessages();
+    document.getElementById("email-form").style.display = "block";
+    document.getElementById("otp-form").style.display = "none";
+    document.getElementById("auth-title").textContent = "Sign in to your account";
+    document.getElementById("auth-subtitle").textContent = "Passwordless sign-in with a one-time verification code.";
+  }
+
+  async function handleSendOtp(e) {
+    if (e) e.preventDefault();
+    clearMessages();
+
+    const emailInput = document.getElementById("user-email");
+    const email = (emailInput.value || savedEmail).trim();
+    if (!email || !email.includes("@")) {
+      showAlert("Please enter a valid email address.");
+      return;
+    }
+    savedEmail = email;
+
+    const btn = document.getElementById("send-btn");
+    btn.disabled = true;
+    btn.textContent = "Sending code...";
+
+    try {
+      // Direct REST call to Supabase Auth OTP endpoint
+      const response = await fetch(`${supabaseUrl}/auth/v1/otp`, {
+        method: "POST",
+        headers: {
+          "apikey": supabaseAnonKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: email,
+          create_user: true
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.msg || errData.error_description || "Failed to send code");
+      }
+
+      document.getElementById("email-form").style.display = "none";
+      document.getElementById("otp-form").style.display = "block";
+      document.getElementById("auth-title").textContent = "Enter verification code";
+      document.getElementById("auth-subtitle").textContent = `Check your inbox at ${email}`;
+      showInfo(`We sent a 6-digit verification code to ${email}`);
+      startCooldown(60);
+      document.getElementById("otp-code").focus();
+    } catch (err) {
+      showAlert(err.message || "An unexpected error occurred while requesting verification code.");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Send verification code";
+    }
+  }
+
+  async function handleVerifyOtp(e) {
+    e.preventDefault();
+    clearMessages();
+
+    const token = document.getElementById("otp-code").value.trim();
+    if (!token) {
+      showAlert("Please enter the verification code.");
+      return;
+    }
+
+    const btn = document.getElementById("verify-btn");
+    btn.disabled = true;
+    btn.textContent = "Verifying...";
+
+    try {
+      // 1. Verify token with Supabase Auth
+      const response = await fetch(`${supabaseUrl}/auth/v1/verify`, {
+        method: "POST",
+        headers: {
+          "apikey": supabaseAnonKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          type: "email",
+          email: savedEmail,
+          token: token
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.msg || data.error_description || "Verification failed. Please check code or retry.");
+      }
+
+      if (!data.access_token) {
+        throw new Error("No access token returned from verification provider.");
+      }
+
+      // 2. Set session cookie on our Python backend
+      const sessionRes = await fetch("/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: data.access_token })
+      });
+
+      if (!sessionRes.ok) {
+        throw new Error("Failed to establish server session. Please retry.");
+      }
+
+      // 3. Redirect to dashboard
+      window.location.href = "/dashboard";
+    } catch (err) {
+      showAlert(err.message || "Invalid code or verification failure.");
+      btn.disabled = false;
+      btn.textContent = "Verify and continue";
+    }
+  }
+</script>
+{% endblock %}
+

@@ -26,7 +26,11 @@ from app.schemas.meeting import (
     MeetingListItem,
     MeetingRecordingDetail,
 )
-from app.services.meeting_service import MeetingNotFoundError, MeetingService
+from app.services.meeting_service import (
+    MeetingNotFoundError,
+    MeetingService,
+    StorageError,
+)
 from app.services.upload_service import (
     UploadService,
     UploadStorageError,
@@ -207,6 +211,7 @@ async def get_meeting_details(
     responses={
         401: {"model": ErrorEnvelope},
         404: {"model": ErrorEnvelope},
+        502: {"model": ErrorEnvelope},
     },
 )
 async def delete_meeting(
@@ -225,6 +230,13 @@ async def delete_meeting(
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content=create_error_envelope("NOT_FOUND", "Meeting not found", request).model_dump(
+                mode="json"
+            ),
+        )
+    except StorageError as err:
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content=create_error_envelope("STORAGE_ERROR", err.message, request).model_dump(
                 mode="json"
             ),
         )

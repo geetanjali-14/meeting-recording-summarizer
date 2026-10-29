@@ -137,15 +137,27 @@ def create_app() -> FastAPI:
     # Mount API v1 router
     app.include_router(api_v1_router, prefix="/api/v1")
 
-    # Root route for browser health check & welcoming
-    @app.get("/", tags=["Root"])
-    async def root() -> dict[str, str]:
-        return {
-            "status": "online",
-            "message": "Meeting Intelligence Summarizer API is running",
-            "docs": "/docs",
-            "health": "/api/v1/health",
-        }
+    # Mount static assets and web UI router
+    from pathlib import Path
+
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
+    from app.api.web import web_router
+
+    static_path = Path(__file__).resolve().parent / "static"
+    if static_path.exists():
+        app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+
+        @app.get("/favicon.ico", include_in_schema=False)
+        async def favicon() -> FileResponse:
+            ico_file = static_path / "favicon.ico"
+            if ico_file.exists():
+                return FileResponse(ico_file, media_type="image/x-icon")
+            svg_file = static_path / "favicon.svg"
+            return FileResponse(svg_file, media_type="image/svg+xml")
+
+    app.include_router(web_router)
 
     return app
 

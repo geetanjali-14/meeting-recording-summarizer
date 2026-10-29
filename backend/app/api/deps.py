@@ -51,7 +51,7 @@ async def get_current_user(
     """Reusable FastAPI dependency extracting and validating authenticated user identity.
 
     Fails closed:
-    - Missing Authorization header and query token -> 401 Unauthorized
+    - Missing Authorization header, query token, and session cookie -> 401 Unauthorized
     - Malformed or invalid JWT -> 401 Unauthorized
     - Expired or unverifiable token -> 401 Unauthorized
     - Invalid subject UUID -> 401 Unauthorized
@@ -59,9 +59,15 @@ async def get_current_user(
     Never logs access tokens or sensitive payloads.
     """
     token = credentials.credentials if (credentials and credentials.credentials) else None
+    is_cookie_auth = False
     if not token:
         # Fallback for Server-Sent Events (SSE) EventSource which cannot set custom HTTP headers
         token = request.query_params.get("token")
+    if not token:
+        # Fallback for browser session cookie in server-rendered templates
+        token = request.cookies.get("access_token")
+        if token:
+            is_cookie_auth = True
 
     if not token:
         raise HTTPException(
@@ -69,6 +75,50 @@ async def get_current_user(
             detail="Missing bearer authorization credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # CSRF defense: If request is authenticated via browser cookie and is state-changing
+    if is_cookie_auth and request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
+        req_host = request.headers.get("host")
+
+        allowed_origins = set()
+        if req_host:
+            allowed_origins.add(f"http://{req_host}")
+            allowed_origins.add(f"https://{req_host}")
+
+        # Also permit configured CORS_ORIGINS
+        if isinstance(settings.CORS_ORIGINS, list):
+            for o in settings.CORS_ORIGINS:
+                allowed_origins.add(o.rstrip("/"))
+
+        origin_valid = False
+        if origin and origin.rstrip("/") in allowed_origins:
+            origin_valid = True
+        elif not origin and referer:
+            from urllib.parse import urlparse
+
+            ref_url = urlparse(referer)
+            ref_origin = f"{ref_url.scheme}://{ref_url.netloc}".rstrip("/")
+            if ref_origin in allowed_origins:
+                origin_valid = True
+
+        if not origin_valid:
+            logger.warning(
+                "CSRF validation failed for cookie-authenticated mutation",
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "origin": origin,
+                    "referer": referer,
+                    "host": req_host,
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cross-site request validation failed.",
+            )
+
     try:
         user_context = await verify_jwt_token(token=token, settings=settings)
         return user_context
@@ -86,6 +136,18 @@ async def get_current_user(
             detail="Authentication failed",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
+
+
+async def get_optional_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Security(http_bearer),
+    settings: Settings = Depends(get_settings),
+) -> UserContext | None:
+    """Optional user context dependency for UI routes. Returns None if unauthenticated."""
+    try:
+        return await get_current_user(request=request, credentials=credentials, settings=settings)
+    except HTTPException:
+        return None
 
 
 def get_storage_provider(

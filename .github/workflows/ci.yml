@@ -42,36 +42,6 @@ jobs:
         run: |
           pytest
 
-  frontend-checks:
-    name: Frontend Lint, Type Check & Build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: TypeScript Type Check
-        run: npm run typecheck
-
-      - name: ESLint
-        run: npm run lint
-
-      - name: Build Next.js
-        run: npm run build
-
   container-builds:
     name: Container Build Verification
     runs-on: ubuntu-latest
@@ -82,7 +52,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build API Image
+      - name: Build API & Web Image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -96,13 +66,5 @@ jobs:
           file: Dockerfile.worker
           push: false
 
-      - name: Build Frontend Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile.frontend
-          build-args: |
-            NEXT_PUBLIC_API_URL=http://localhost:8000
-          push: false
 
 

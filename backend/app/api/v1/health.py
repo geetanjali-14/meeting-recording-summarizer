@@ -57,7 +57,9 @@ async def check_database() -> bool:
                 res = await conn.execute(text("SELECT 1"))
                 return bool(res.scalar() == 1)
     except Exception as exc:
-        logger.warning("Readiness probe database check failed: %s (%s)", exc.__class__.__name__, exc)
+        logger.warning(
+            "Readiness probe database check failed: %s (%s)", exc.__class__.__name__, exc
+        )
         return False
 
 

@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}Upload New Meeting - Meeting Intelligence Summarizer{% endblock %}
+
+{% block content %}
+<div style="max-width: 760px; margin: 0 auto; padding-top: 1rem;">
+  <div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--slate-900);">Upload New Meeting</h1>
+    <p style="font-size: 0.875rem; color: var(--slate-500); margin-top: 0.25rem;">
+      Upload an audio or video recording to initiate speech transcription, speaker diarization, and structured AI analysis.
+    </p>
+  </div>
+
+  <div class="card">
+    <div id="upload-alert" class="alert alert-error" style="display: none;"></div>
+
+    <form id="upload-form" onsubmit="handleUploadSubmit(event)">
+      <!-- Dropzone -->
+      <div class="form-group">
+        <label class="form-label">Recording File (Audio or Video up to 500 MB) *</label>
+        <div
+          id="dropzone"
+          style="border: 2px dashed var(--slate-300); border-radius: 0.75rem; padding: 2.5rem 1.5rem; text-align: center; cursor: pointer; background-color: var(--slate-50); transition: all 0.2s ease-in-out;"
+          onclick="document.getElementById('file-input').click()"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event)"
+        >
+          <input
+            id="file-input"
+            type="file"
+            accept="audio/*,video/*,.mp4,.mp3,.wav,.m4a,.webm,.mov"
+            style="display: none;"
+            onchange="handleFileSelected(event)"
+          >
+          <div id="dropzone-prompt">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎙️</div>
+            <p style="font-size: 0.875rem; font-weight: 600; color: var(--slate-700);">
+              Click to select or drag and drop your recording here
+            </p>
+            <p style="font-size: 0.75rem; color: var(--slate-500); margin-top: 0.25rem;">
+              Supports WAV, MP3, MP4, M4A, WebM (up to 500 MB)
+            </p>
+          </div>
+          <div id="dropzone-selected" style="display: none;">
+            <div style="font-size: 2rem; margin-bottom: 0.25rem;">🎵</div>
+            <p id="selected-filename" style="font-size: 0.875rem; font-weight: 700; color: var(--slate-900);"></p>
+            <p id="selected-filesize" style="font-size: 0.75rem; color: var(--slate-500);"></p>
+            <span style="font-size: 0.75rem; color: var(--primary); text-decoration: underline; margin-top: 0.5rem; display: inline-block;">
+              Click to choose a different file
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Title & Date -->
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label for="meeting-title" class="form-label">Meeting Title *</label>
+          <input
+            id="meeting-title"
+            type="text"
+            required
+            placeholder="e.g. Q4 Sprint Planning"
+            class="form-input"
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="meeting-date" class="form-label">Meeting Date *</label>
+          <input
+            id="meeting-date"
+            type="date"
+            required
+            class="form-input"
+          >
+        </div>
+      </div>
+
+      <!-- Optional Description -->
+      <div class="form-group">
+        <label for="meeting-desc" class="form-label">Description (Optional)</label>
+        <textarea
+          id="meeting-desc"
+          rows="2"
+          placeholder="Brief discussion context or agenda..."
+          class="form-textarea"
+        ></textarea>
+      </div>
+
+      <!-- Progress Section -->
+      <div id="progress-container" style="display: none; margin-bottom: 1.5rem; background: var(--slate-50); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--slate-200);">
+        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 600; color: var(--slate-700); margin-bottom: 0.5rem;">
+          <span id="progress-status-text">Uploading to storage...</span>
+          <span id="progress-percent-text">0%</span>
+        </div>
+        <div style="width: 100%; height: 0.5rem; background-color: var(--slate-200); border-radius: 9999px; overflow: hidden;">
+          <div id="progress-bar" style="width: 0%; height: 100%; background-color: var(--primary); transition: width 0.2s ease-in-out;"></div>
+        </div>
+      </div>
+
+      <button id="submit-btn" type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-size: 0.875rem;" disabled>
+        Start Processing Meeting
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let selectedFile = null;
+  const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
+
+  // Default meeting date to today
+  document.getElementById("meeting-date").value = new Date().toISOString().split("T")[0];
+
+  function showUploadError(msg) {
+    const el = document.getElementById("upload-alert");
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+
+  function clearUploadError() {
+    document.getElementById("upload-alert").style.display = "none";
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    document.getElementById("dropzone").style.borderColor = "var(--primary)";
+    document.getElementById("dropzone").style.backgroundColor = "var(--primary-light)";
+  }
+
+  function handleDragLeave(e) {
+    e.preventDefault();
+    document.getElementById("dropzone").style.borderColor = "var(--slate-300)";
+    document.getElementById("dropzone").style.backgroundColor = "var(--slate-50)";
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    handleDragLeave(e);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  }
+
+  function handleFileSelected(e) {
+    if (e.target.files && e.target.files.length > 0) {
+      processFile(e.target.files[0]);
+    }
+  }
+
+  function processFile(file) {
+    clearUploadError();
+    if (file.size > MAX_FILE_SIZE) {
+      showUploadError(`File size (${(file.size / (1024*1024)).toFixed(1)} MB) exceeds the 500 MB limit.`);
+      return;
+    }
+
+    selectedFile = file;
+    document.getElementById("selected-filename").textContent = file.name;
+    document.getElementById("selected-filesize").textContent = `${(file.size / (1024*1024)).toFixed(2)} MB`;
+    document.getElementById("dropzone-prompt").style.display = "none";
+    document.getElementById("dropzone-selected").style.display = "block";
+
+    // Auto-fill title if empty
+    const titleInput = document.getElementById("meeting-title");
+    if (!titleInput.value) {
+      const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+      titleInput.value = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+    }
+
+    document.getElementById("submit-btn").disabled = false;
+  }
+
+  function resolveMime(file) {
+    const name = file.name.toLowerCase();
+    const type = (file.type || "").toLowerCase();
+
+    // Prioritize file extension when browser supplies legacy/exotic system types (e.g. video/x-sgi-movie)
+    if (name.endsWith(".mp3")) return "audio/mpeg";
+    if (name.endsWith(".wav")) return "audio/wav";
+    if (name.endsWith(".m4a")) return "audio/x-m4a";
+    if (name.endsWith(".mp4")) return "video/mp4";
+    if (name.endsWith(".mov")) return "video/quicktime";
+    if (name.endsWith(".webm")) return "video/webm";
+    if (name.endsWith(".mkv")) return "video/x-matroska";
+    if (name.endsWith(".ogg")) return "audio/ogg";
+
+    if (type === "audio/mp3") return "audio/mpeg";
+    if (type === "audio/x-wav") return "audio/wav";
+    if (type === "audio/m4a") return "audio/x-m4a";
+    if (type === "video/x-sgi-movie") return "video/quicktime";
+    if (type && type !== "application/octet-stream") return type;
+
+    return "video/mp4";
+  }
+
+  async function handleUploadSubmit(e) {
+    e.preventDefault();
+    if (!selectedFile) return;
+
+    clearUploadError();
+    const title = document.getElementById("meeting-title").value.trim();
+    const meetingDate = document.getElementById("meeting-date").value;
+    const description = document.getElementById("meeting-desc").value.trim();
+
+    if (!title) {
+      showUploadError("Please provide a meeting title.");
+      return;
+    }
+
+    const submitBtn = document.getElementById("submit-btn");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Uploading & Preparing...";
+
+    const progressContainer = document.getElementById("progress-container");
+    const progressStatus = document.getElementById("progress-status-text");
+    const progressPercent = document.getElementById("progress-percent-text");
+    const progressBar = document.getElementById("progress-bar");
+    progressContainer.style.display = "block";
+
+    try {
+      // Step 1: Create meeting record & obtain pre-signed PUT URL
+      progressStatus.textContent = "1. Requesting upload pre-authorization...";
+      const contentType = resolveMime(selectedFile);
+
+      const createRes = await fetch("/api/v1/meetings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title,
+          description: description || undefined,
+          meeting_date: meetingDate,
+          filename: selectedFile.name,
+          content_type: contentType,
+          file_size_bytes: selectedFile.size
+        })
+      });
+
+      if (!createRes.ok) {
+        const err = await createRes.json().catch(() => ({}));
+        throw new Error(err.error?.message || "Failed to initiate meeting upload.");
+      }
+
+      const createData = await createRes.json();
+      const { meeting_id, recording_id, upload_url, upload_token } = createData.data;
+
+      // Step 2: Upload file directly to Cloudflare R2
+      progressStatus.textContent = "2. Uploading media directly to private storage...";
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", upload_url, true);
+        xhr.setRequestHeader("Content-Type", contentType);
+
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) {
+            const pct = Math.round((evt.loaded / evt.total) * 100);
+            progressBar.style.width = `${pct}%`;
+            progressPercent.textContent = `${pct}%`;
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Storage direct upload failed with status ${xhr.status}`));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error("Network connection error during file upload."));
+        xhr.send(selectedFile);
+      });
+
+      // Step 3: Confirm upload completion with backend
+      progressStatus.textContent = "3. Confirming upload and queueing analysis...";
+      const confirmRes = await fetch(`/api/v1/meetings/${meeting_id}/confirm-upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recording_id: recording_id,
+          upload_token: upload_token
+        })
+      });
+
+      if (!confirmRes.ok) {
+        const err = await confirmRes.json().catch(() => ({}));
+        throw new Error(err.error?.message || "Failed to confirm upload with backend.");
+      }
+
+      // Success: Redirect straight to meeting detail / processing screen
+      window.location.href = `/meetings/${meeting_id}`;
+    } catch (err) {
+      showUploadError(err.message || "An unexpected error occurred during upload.");
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Start Processing Meeting";
+    }
+  }
+</script>
+{% endblock %}
+
